@@ -31,19 +31,16 @@ export function LoginForm({ showDev }: { showDev: boolean }) {
       {showDev && (
         <div className="rounded-lg border border-dashed border-black/20 p-3 dark:border-white/20">
           <p className="mb-2 text-xs opacity-60">Dev quick-login (seeded users)</p>
-          <form className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {(["owner", "employee", "tenant"] as const).map((r) => (
-              <button
-                key={r}
-                formAction={devLoginAction}
-                name="role"
-                value={r}
-                className="rounded-md border border-black/15 px-2 py-1.5 text-xs capitalize hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                {r}
-              </button>
+              <form key={r} action={devLoginAction}>
+                <input type="hidden" name="role" value={r} />
+                <button className="w-full rounded-md border border-black/15 px-2 py-1.5 text-xs capitalize hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                  {r}
+                </button>
+              </form>
             ))}
-          </form>
+          </div>
         </div>
       )}
     </div>
