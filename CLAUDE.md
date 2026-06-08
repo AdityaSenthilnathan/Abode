@@ -5,7 +5,7 @@ Real-estate SaaS with three role-based experiences in one Next.js web app:
 
 ## Stack
 - **Next.js 15.5** (App Router, TS strict), React 19, Tailwind v4.
-- **Drizzle ORM 0.45** over `pg` → **Postgres** (dev: local Docker; prod: Aurora Serverless v2 via RDS Proxy).
+- **Drizzle ORM 0.45** over `pg` → **AWS Aurora PostgreSQL Serverless v2** (cluster `abode-dev` in us-west-1; scale-to-zero auto-pause, Data API on for the RDS console Query Editor).
 - **AWS Cognito** auth (direct SDK + httpOnly token cookies + `aws-jwt-verify`). **S3** media (presigned). **Stripe** payments. **Mapbox** maps. Notifications + live-ish chat via polling (AppSync Events is the documented realtime upgrade).
 - Infra via idempotent **AWS CLI** scripts in `infra/`. Provisioned in account **004730169847** (us-west-1).
 
@@ -15,14 +15,13 @@ Real-estate SaaS with three role-based experiences in one Next.js web app:
 - `npm run db:generate | db:migrate | db:seed`
 - Test scripts: `npx tsx scripts/smoke.ts` (page smoke — needs dev server), `db/verify-rls.ts` (RLS isolation), `scripts/test-cognito.ts`, `scripts/test-s3.ts`
 
-### Local dev DB
-Dev uses a Docker Postgres (Aurora is blocked on the AWS free plan):
+### Dev database (AWS Aurora Serverless v2 — nothing local)
+The DB is an **Aurora PostgreSQL Serverless v2** cluster `abode-dev` in us-west-1 (scale-to-zero auto-pause; **Data API on** → browse/query tables in the AWS console at **RDS → Query Editor**). Publicly reachable but **IP-locked** to your machine via the security group. Refresh creds / re-point `.env.local`:
 ```bash
-docker start abode-pg || docker run -d --name abode-pg -e POSTGRES_PASSWORD=abode -e POSTGRES_USER=abode -e POSTGRES_DB=abode -p 5433:5432 postgres:16
-DATABASE_URL='postgres://abode:abode@127.0.0.1:5433/abode' PGSSL=disable npm run db:migrate
-DATABASE_URL='postgres://abode:abode@127.0.0.1:5433/abode' PGSSL=disable npm run db:seed
-npm run dev   # .env.local already points at :5433
+bash infra/write_env.sh   # rebuilds ../.env.local from SSM + Secrets Manager (TLS on)
+npm run db:migrate && npm run db:seed && npm run dev
 ```
+Re-provision the cluster idempotently with `bash infra/03_aurora.sh`. Browse tables locally via `npm run db:studio`. Prod hardening (RDS Proxy + App Runner) is `infra/90_prod.sh`.
 Dev login: `/login` has quick-login buttons (seeded owner/handyman/tenant) plus real Cognito sign-up/in.
 
 ## Features (all built + verified)

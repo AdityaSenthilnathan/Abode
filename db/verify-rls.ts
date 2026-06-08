@@ -3,7 +3,8 @@
  * cross-tenant access is denied, and that an unset context is default-deny.
  *   DATABASE_URL=... PGSSL=disable npx tsx db/verify-rls.ts
  */
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 import { Pool } from "pg";
 
 let failures = 0;

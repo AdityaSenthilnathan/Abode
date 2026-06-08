@@ -55,5 +55,8 @@ ssm_put db_endpoint "$ENDPOINT"
 ssm_put db_secret_arn "$SECRET_ARN"
 ssm_put db_name "$DB_NAME"
 
+# enable the Data API → browse/query tables in the RDS console Query Editor
+aws rds modify-db-cluster --db-cluster-identifier "$CLUSTER_ID" --enable-http-endpoint --apply-immediately >/dev/null 2>&1 || true
+
 ok "Aurora ready at $ENDPOINT (db=$DB_NAME). Master secret in Secrets Manager."
 warn "Dev DB is publicly accessible but locked to your IP. Prod (90_*) moves it private behind RDS Proxy."
