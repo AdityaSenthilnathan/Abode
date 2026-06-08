@@ -113,6 +113,12 @@ create or replace function app_can_see_user(target uuid) returns boolean
     or exists (select 1 from conversations c
                where (c.participant_a = app_current_user_id() and c.participant_b = target)
                   or (c.participant_b = app_current_user_id() and c.participant_a = target))
+    -- an employee can see tenants of properties they're assigned to
+    or exists (select 1 from property_employees pe join units un on un.property_id = pe.property_id
+               where pe.employee_id = app_current_user_id() and un.tenant_id = target)
+    -- ...and the owner of properties they're assigned to
+    or exists (select 1 from property_employees pe join properties pr on pr.id = pe.property_id
+               where pe.employee_id = app_current_user_id() and pr.owner_id = target)
 $$;
 
 -- ------------------------------------------------------------- enable + deny
