@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
 import {
   conversations,
@@ -133,9 +133,26 @@ export async function assignTask(
       .set({ jobCount: sql`${propertyEmployees.jobCount} + 1` })
       .where(and(eq(propertyEmployees.propertyId, opts.propertyId), eq(propertyEmployees.employeeId, opts.assignedTo)));
 
-    await tx
-      .insert(conversations)
-      .values({ participantA: ownerId, participantB: opts.assignedTo, type: "owner_handyman", taskId: task.id });
+    // One owner↔handyman thread per pair — reuse it across tasks so the
+    // messages inbox doesn't show the same handyman once per assigned job.
+    const [existingConvo] = await tx
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.type, "owner_handyman"),
+          or(
+            and(eq(conversations.participantA, ownerId), eq(conversations.participantB, opts.assignedTo)),
+            and(eq(conversations.participantA, opts.assignedTo), eq(conversations.participantB, ownerId)),
+          ),
+        ),
+      )
+      .limit(1);
+    if (!existingConvo) {
+      await tx
+        .insert(conversations)
+        .values({ participantA: ownerId, participantB: opts.assignedTo, type: "owner_handyman", taskId: task.id });
+    }
 
     await tx.insert(notifications).values({
       recipientId: opts.assignedTo,
@@ -163,7 +180,7 @@ export async function fixItBoard(ownerId: string) {
       .from(maintenanceRequests)
       .innerJoin(units, eq(units.id, maintenanceRequests.unitId))
       .innerJoin(properties, eq(properties.id, units.propertyId))
-      .where(ne(maintenanceRequests.status, "done"))
+      .where(eq(maintenanceRequests.status, "received"))
       .orderBy(desc(maintenanceRequests.createdAt));
 
     const hands = await tx
