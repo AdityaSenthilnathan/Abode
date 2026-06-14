@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import type { AuthenticationResultType } from "@aws-sdk/client-cognito-identity-provider";
@@ -46,8 +47,12 @@ async function userBySub(sub: string): Promise<SessionUser | null> {
  * Dev fallback (only when ALLOW_DEV_LOGIN=true and not production): an
  * `abode_dev_user` cookie naming a seeded user id — lets us exercise role UIs
  * without creating real Cognito accounts.
+ *
+ * Memoized per server request via React `cache()`: a layout and the page it
+ * wraps both call this on every navigation, and without memoization that's
+ * two identical token verifications + DB lookups.
  */
-export async function getCurrentUser(): Promise<SessionUser | null> {
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const jar = await cookies();
 
   const at = jar.get(AT)?.value;
@@ -74,4 +79,4 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   }
 
   return null;
-}
+});
