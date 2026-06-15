@@ -1,8 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/server/auth/session";
-import { NotificationBell } from "@/components/notification-bell";
-
 export interface NavItem {
   href: string;
   label: string;
@@ -33,7 +31,6 @@ export function AppShell({
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
-            <NotificationBell />
             <span className="opacity-60">
               {user.fullName ?? user.email} · <span className="capitalize">{user.role}</span>
             </span>
