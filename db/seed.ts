@@ -8,7 +8,11 @@
  *
  * Usage: `npm run db:seed`
  */
-import "dotenv/config";
+// Load env the same way the Next app does: `.env.local` wins, `.env` fills gaps.
+// (dotenv does not override already-set vars, so the first load takes precedence.)
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env.local" });
+loadEnv({ path: ".env" });
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";

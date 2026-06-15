@@ -5,7 +5,11 @@
  * Runs as the connecting (master) role, which bypasses RLS — exactly what we
  * want for DDL. Usage: `npm run db:migrate`
  */
-import "dotenv/config";
+// Load env the same way the Next app does: `.env.local` wins, `.env` fills gaps.
+// (dotenv does not override already-set vars, so the first load takes precedence.)
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env.local" });
+loadEnv({ path: ".env" });
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Pool } from "pg";

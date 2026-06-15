@@ -136,8 +136,16 @@ export async function signupTenantAction(_prev: AuthState, formData: FormData): 
 export async function devLoginAction(formData: FormData): Promise<void> {
   if (process.env.NODE_ENV === "production" || process.env.ALLOW_DEV_LOGIN !== "true") return;
   const role = String(formData.get("role")) as Role;
-  const [u] = await db.select().from(users).where(eq(users.role, role)).limit(1);
-  if (!u) return;
-  (await cookies()).set("abode_dev_user", u.id, { httpOnly: true, sameSite: "lax", path: "/" });
+  // Prefer a real seeded user so DB-backed pages work as normal. If the DB is
+  // unreachable (e.g. Aurora paused/IP-locked), fall back to a `dev:<role>`
+  // sentinel so role UIs can still be developed fully offline.
+  let cookieValue = `dev:${role}`;
+  try {
+    const [u] = await db.select().from(users).where(eq(users.role, role)).limit(1);
+    if (u) cookieValue = u.id;
+  } catch {
+    // DB down — keep the synthetic sentinel.
+  }
+  (await cookies()).set("abode_dev_user", cookieValue, { httpOnly: true, sameSite: "lax", path: "/" });
   redirect(roleHome(role));
 }
