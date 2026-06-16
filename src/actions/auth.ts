@@ -1,4 +1,5 @@
 "use server";
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -35,13 +36,47 @@ const baseSignup = z.object({
 function humanError(e: unknown): string {
   const name = (e as { name?: string })?.name;
   if (name === "UsernameExistsException") return "An account with this email already exists.";
+  // Postgres unique-violation (dev bypass inserts the users row directly).
+  if ((e as { code?: string })?.code === "23505")
+    return "An account with this email already exists.";
   if (name === "InvalidPasswordException")
     return "Password must be 12+ chars with upper, lower, number, and symbol.";
   const msg = (e as Error)?.message;
   return msg && msg.length < 160 ? msg : "Something went wrong. Please try again.";
 }
 
-async function finishSignup(email: string, pw: string) {
+/**
+ * Dev-only escape hatch: when ALLOW_DEV_LOGIN is on (and not production), skip
+ * Cognito entirely. Real Cognito calls need AWS credentials, which the local
+ * machine may not have — without this, signup dies with "Could not load
+ * credentials from any providers." Mirrors devLoginAction / getCurrentUser.
+ */
+function devAuthBypass(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true";
+}
+
+/**
+ * Create the auth identity + local users row for a signup. Dev bypass mints a
+ * synthetic sub and skips Cognito; the real path admin-creates the Cognito user
+ * first. Returns the new users row.
+ */
+async function createAccount(email: string, pw: string, fullName: string, role: Role) {
+  const cognitoSub = devAuthBypass()
+    ? `dev:${randomUUID()}`
+    : await cognitoCreateUser(email, pw, fullName, role);
+  return createUserRecord({ cognitoSub, email, role, fullName });
+}
+
+/**
+ * Start a session for a freshly created user. Dev bypass sets the same
+ * `abode_dev_user` cookie that devLoginAction/getCurrentUser use; the real path
+ * logs in via Cognito to obtain token cookies.
+ */
+async function startSession(user: { id: string }, email: string, pw: string) {
+  if (devAuthBypass()) {
+    (await cookies()).set("abode_dev_user", user.id, { httpOnly: true, sameSite: "lax", path: "/" });
+    return;
+  }
   const auth = await cognitoLogin(email, pw);
   await setSessionCookies(auth, email);
 }
@@ -52,6 +87,28 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     .safeParse({ email: formData.get("email"), password: formData.get("password") });
   if (!parsed.success) return { error: "Enter a valid email and password." };
   const email = parsed.data.email.toLowerCase();
+
+  // Dev bypass: real Cognito login needs AWS creds the local box may lack, and
+  // dev signups never set a Cognito password to verify against. Log a known
+  // local user in by email alone — the same no-password trust model as the dev
+  // quick-login buttons. The password field is ignored here; in production
+  // Cognito enforces it (this branch is dead when ALLOW_DEV_LOGIN is off).
+  if (devAuthBypass()) {
+    let row: { id: string; role: Role } | undefined;
+    try {
+      [row] = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+    } catch {
+      return { error: "Dev DB unavailable — is Postgres running and seeded?" };
+    }
+    if (!row) return { error: "No account with that email yet — sign up first." };
+    (await cookies()).set("abode_dev_user", row.id, { httpOnly: true, sameSite: "lax", path: "/" });
+    redirect(roleHome(row.role));
+  }
+
   try {
     const auth = await cognitoLogin(email, parsed.data.password);
     await setSessionCookies(auth, email);
@@ -75,9 +132,8 @@ export async function signupOwnerAction(_prev: AuthState, formData: FormData): P
   if (!p.success) return { error: p.error.issues[0].message };
   const email = p.data.email.toLowerCase();
   try {
-    const sub = await cognitoCreateUser(email, p.data.password, p.data.fullName, "owner");
-    await createUserRecord({ cognitoSub: sub, email, role: "owner", fullName: p.data.fullName });
-    await finishSignup(email, p.data.password);
+    const user = await createAccount(email, p.data.password, p.data.fullName, "owner");
+    await startSession(user, email, p.data.password);
   } catch (e) {
     return { error: humanError(e) };
   }
@@ -98,10 +154,9 @@ export async function signupEmployeeAction(_prev: AuthState, formData: FormData)
   const code = p.data.code.toUpperCase();
   try {
     await assertCodeValid(code, "employee");
-    const sub = await cognitoCreateUser(email, p.data.password, p.data.fullName, "employee");
-    const u = await createUserRecord({ cognitoSub: sub, email, role: "employee", fullName: p.data.fullName });
-    await redeemEmployeeCode(code, u.id);
-    await finishSignup(email, p.data.password);
+    const user = await createAccount(email, p.data.password, p.data.fullName, "employee");
+    await redeemEmployeeCode(code, user.id);
+    await startSession(user, email, p.data.password);
   } catch (e) {
     return { error: humanError(e) };
   }
@@ -122,10 +177,9 @@ export async function signupTenantAction(_prev: AuthState, formData: FormData): 
   const code = p.data.code.toUpperCase();
   try {
     await assertCodeValid(code, "tenant");
-    const sub = await cognitoCreateUser(email, p.data.password, p.data.fullName, "tenant");
-    const u = await createUserRecord({ cognitoSub: sub, email, role: "tenant", fullName: p.data.fullName });
-    await redeemTenantCode(code, u.id);
-    await finishSignup(email, p.data.password);
+    const user = await createAccount(email, p.data.password, p.data.fullName, "tenant");
+    await redeemTenantCode(code, user.id);
+    await startSession(user, email, p.data.password);
   } catch (e) {
     return { error: humanError(e) };
   }
