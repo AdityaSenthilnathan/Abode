@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { asAdmin } from "@/server/db/rls";
 import { inviteCodes, properties, propertyEmployees, units, users } from "@db/schema";
 import type { Role } from "@/server/auth/session";
@@ -32,6 +32,97 @@ export async function createUserRecord(opts: {
       })
       .returning();
     return u;
+  });
+}
+
+/** Owner creates a property they own — the first step a new owner must take. */
+export async function createProperty(
+  ownerId: string,
+  opts: { name: string; address?: string | null },
+) {
+  return asAdmin(async (tx) => {
+    const [row] = await tx
+      .insert(properties)
+      .values({ ownerId, name: opts.name, address: opts.address ?? null })
+      .returning();
+    return row;
+  });
+}
+
+/** Owner adds a unit to a property they own. Ownership is re-checked here. */
+export async function createUnit(
+  ownerId: string,
+  opts: { propertyId: string; unitNumber: string; rentAmountCents?: number | null },
+) {
+  return asAdmin(async (tx) => {
+    const [owned] = await tx
+      .select({ id: properties.id })
+      .from(properties)
+      .where(and(eq(properties.id, opts.propertyId), eq(properties.ownerId, ownerId)))
+      .limit(1);
+    if (!owned) throw new Error("Property not found");
+    const [row] = await tx
+      .insert(units)
+      .values({
+        propertyId: opts.propertyId,
+        unitNumber: opts.unitNumber,
+        rentAmountCents: opts.rentAmountCents ?? null,
+      })
+      .returning();
+    return row;
+  });
+}
+
+/** Load a property the owner owns, with a unit count, for the delete-confirm screen. */
+export async function getOwnedProperty(ownerId: string, propertyId: string) {
+  return asAdmin(async (tx) => {
+    const [prop] = await tx
+      .select()
+      .from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.ownerId, ownerId)))
+      .limit(1);
+    if (!prop) return null;
+    const [u] = await tx.select({ n: count() }).from(units).where(eq(units.propertyId, propertyId));
+    return { property: prop, unitCount: Number(u?.n ?? 0) };
+  });
+}
+
+/** Delete a property the owner owns. Cascades to its units, invoices, requests, codes. */
+export async function deleteProperty(ownerId: string, propertyId: string) {
+  return asAdmin(async (tx) => {
+    const deleted = await tx
+      .delete(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.ownerId, ownerId)))
+      .returning({ id: properties.id });
+    if (deleted.length === 0) throw new Error("Property not found");
+  });
+}
+
+/** Load a unit the owner owns (via its property), for the delete-confirm screen. */
+export async function getOwnedUnit(ownerId: string, unitId: string) {
+  return asAdmin(async (tx) => {
+    const [row] = await tx
+      .select({ unit: units, propertyName: properties.name, ownerId: properties.ownerId })
+      .from(units)
+      .innerJoin(properties, eq(properties.id, units.propertyId))
+      .where(eq(units.id, unitId))
+      .limit(1);
+    if (!row || row.ownerId !== ownerId) return null;
+    return { unit: row.unit, propertyName: row.propertyName };
+  });
+}
+
+/** Delete a unit the owner owns. Cascades to its invoices, requests, and codes. */
+export async function deleteUnit(ownerId: string, unitId: string) {
+  return asAdmin(async (tx) => {
+    const [row] = await tx
+      .select({ id: units.id, ownerId: properties.ownerId })
+      .from(units)
+      .innerJoin(properties, eq(properties.id, units.propertyId))
+      .where(eq(units.id, unitId))
+      .limit(1);
+    if (!row || row.ownerId !== ownerId) throw new Error("Unit not found");
+    await tx.delete(units).where(eq(units.id, unitId));
   });
 }
 
