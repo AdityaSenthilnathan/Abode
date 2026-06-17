@@ -1,5 +1,5 @@
 "use client";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { signupOwnerAction, signupEmployeeAction, signupTenantAction } from "@/actions/auth";
 import type { Role } from "@/server/auth/session";
@@ -26,19 +26,49 @@ const input =
 
 export function SignupForm({ role }: { role: Role }) {
   const [state, action, pending] = useActionState(ACTIONS[role], undefined);
+  // Controlled so a failed submit keeps what the user typed — React resets
+  // uncontrolled fields after a form action completes.
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   return (
     <form action={action} className="grid gap-3">
-      <input name="fullName" placeholder="Full name" required className={input} />
-      <input name="email" type="email" placeholder="Email" required className={input} />
+      <input
+        name="fullName"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        placeholder="Full name"
+        required
+        className={input}
+      />
+      <input
+        name="email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        required
+        className={input}
+      />
       <input
         name="password"
         type="password"
-        placeholder="Password (12+ chars, upper/lower/number/symbol)"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password (8+ chars, 1 uppercase, 1 number)"
         required
         className={input}
       />
       {role !== "owner" && (
-        <input name="code" placeholder={CODE_LABEL[role]} required className={input} />
+        <input
+          name="code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder={CODE_LABEL[role]}
+          required
+          className={input}
+        />
       )}
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       <button

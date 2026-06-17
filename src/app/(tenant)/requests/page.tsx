@@ -47,19 +47,24 @@ export default async function RequestsPage() {
       ) : (
         <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/15">
           {rows.map((r) => (
-            <li key={r.id} className="flex items-start justify-between gap-4 p-4">
-              <div className="min-w-0">
-                <div className="truncate">{r.description}</div>
-                <div className="mt-1 text-xs opacity-60">
-                  <span className={URGENCY[r.urgency]}>{r.urgency} priority</span>
-                  {r.mediaUrls.length > 0 ? ` · ${r.mediaUrls.length} attachment(s)` : ""}
-                </div>
-              </div>
-              <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-xs capitalize ${STATUS[r.status] ?? ""}`}
+            <li key={r.id}>
+              <Link
+                href={`/requests/${r.id}`}
+                className="flex items-start justify-between gap-4 p-4 hover:bg-black/5 dark:hover:bg-white/5"
               >
-                {r.status}
-              </span>
+                <div className="min-w-0">
+                  <div className="truncate">{r.description}</div>
+                  <div className="mt-1 text-xs opacity-60">
+                    <span className={URGENCY[r.urgency]}>{r.urgency} priority</span>
+                    {r.mediaUrls.length > 0 ? ` · ${r.mediaUrls.length} attachment(s)` : ""}
+                  </div>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs capitalize ${STATUS[r.status] ?? ""}`}
+                >
+                  {r.status}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>

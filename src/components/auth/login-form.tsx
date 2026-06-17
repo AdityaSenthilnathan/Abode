@@ -1,5 +1,5 @@
 "use client";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { loginAction, devLoginAction } from "@/actions/auth";
 
@@ -8,11 +8,30 @@ const input =
 
 export function LoginForm({ showDev }: { showDev: boolean }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
+  // Controlled so a failed sign-in keeps the email/password instead of clearing.
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   return (
     <div className="grid gap-6">
       <form action={action} className="grid gap-3">
-        <input name="email" type="email" placeholder="Email" required className={input} />
-        <input name="password" type="password" placeholder="Password" required className={input} />
+        <input
+          name="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          required
+          className={input}
+        />
+        <input
+          name="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          required
+          className={input}
+        />
         {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
         <button
           disabled={pending}

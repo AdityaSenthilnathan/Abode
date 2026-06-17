@@ -21,11 +21,9 @@ export type AuthState = { error: string } | undefined;
 
 const password = z
   .string()
-  .min(12, "Password must be at least 12 characters")
+  .min(8, "Password must be at least 8 characters")
   .regex(/[A-Z]/, "Add an uppercase letter")
-  .regex(/[a-z]/, "Add a lowercase letter")
-  .regex(/[0-9]/, "Add a number")
-  .regex(/[^A-Za-z0-9]/, "Add a symbol");
+  .regex(/[0-9]/, "Add a number");
 
 const baseSignup = z.object({
   fullName: z.string().trim().min(1, "Name required"),
@@ -40,7 +38,7 @@ function humanError(e: unknown): string {
   if ((e as { code?: string })?.code === "23505")
     return "An account with this email already exists.";
   if (name === "InvalidPasswordException")
-    return "Password must be 12+ chars with upper, lower, number, and symbol.";
+    return "Password must be 8+ characters with an uppercase letter and a number.";
   const msg = (e as Error)?.message;
   return msg && msg.length < 160 ? msg : "Something went wrong. Please try again.";
 }

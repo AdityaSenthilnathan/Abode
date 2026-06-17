@@ -23,6 +23,7 @@ export function navForRole(role: Role): NavItem[] {
         { href: "/home", label: "Home" },
         { href: "/requests", label: "Requests" },
         { href: "/dues", label: "Dues" },
+        { href: "/notifications", label: "Notifications" },
         { href: "/messages", label: "Messages" },
       ];
   }

@@ -12,7 +12,7 @@ POOL_ID="$(none_to_empty "$(aws cognito-idp list-user-pools --max-results 60 \
 if [ -z "$POOL_ID" ]; then
   POOL_ID="$(aws cognito-idp create-user-pool --pool-name "$POOL_NAME" \
     --auto-verified-attributes email --username-attributes email --mfa-configuration OFF \
-    --policies '{"PasswordPolicy":{"MinimumLength":12,"RequireUppercase":true,"RequireLowercase":true,"RequireNumbers":true,"RequireSymbols":true}}' \
+    --policies '{"PasswordPolicy":{"MinimumLength":8,"RequireUppercase":true,"RequireLowercase":false,"RequireNumbers":true,"RequireSymbols":false}}' \
     --query 'UserPool.Id' --output text)"
   log "created user pool $POOL_ID"
 fi

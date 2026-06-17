@@ -123,10 +123,22 @@ export async function assignTask(
       .returning();
 
     if (opts.requestId) {
-      await tx
+      const [req] = await tx
         .update(maintenanceRequests)
         .set({ status: "working" })
-        .where(eq(maintenanceRequests.id, opts.requestId));
+        .where(eq(maintenanceRequests.id, opts.requestId))
+        .returning({ submittedBy: maintenanceRequests.submittedBy });
+      // Close the loop back to the tenant who filed the request.
+      if (req) {
+        await tx.insert(notifications).values({
+          recipientId: req.submittedBy,
+          type: "info",
+          title: "Maintenance underway",
+          body: opts.title,
+          entityType: "request",
+          entityId: opts.requestId,
+        });
+      }
     }
     await tx
       .update(propertyEmployees)
@@ -252,10 +264,22 @@ export function acceptCompletion(ownerId: string, taskId: string) {
     if (!row || row.ownerId !== ownerId) throw new Error("Task not found");
     await tx.update(tasks).set({ status: "done" }).where(eq(tasks.id, taskId));
     if (row.task.requestId) {
-      await tx
+      const [req] = await tx
         .update(maintenanceRequests)
         .set({ status: "done" })
-        .where(eq(maintenanceRequests.id, row.task.requestId));
+        .where(eq(maintenanceRequests.id, row.task.requestId))
+        .returning({ submittedBy: maintenanceRequests.submittedBy });
+      // Tell the tenant their request is resolved.
+      if (req) {
+        await tx.insert(notifications).values({
+          recipientId: req.submittedBy,
+          type: "success",
+          title: "Request resolved",
+          body: row.task.title ?? "",
+          entityType: "request",
+          entityId: row.task.requestId,
+        });
+      }
     }
     if (row.task.assignedTo) {
       await tx.insert(notifications).values({
