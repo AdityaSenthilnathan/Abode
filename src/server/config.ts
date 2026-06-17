@@ -19,6 +19,16 @@ export function requireEnv(name: string): string {
   return v;
 }
 
+/**
+ * Dev-only offline bypass. Enabled on a non-production box that opts in via
+ * ALLOW_DEV_LOGIN. Used to stand in for external services (Cognito auth, Stripe
+ * payments) when their credentials aren't configured locally. ALWAYS false in
+ * production, so these shortcuts can never run against real users.
+ */
+export function devBypass(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true";
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   appUrl: opt("APP_URL") ?? "http://localhost:3000",

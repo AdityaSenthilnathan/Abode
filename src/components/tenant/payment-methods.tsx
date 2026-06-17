@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { confirmCardAction, createSetupIntentAction } from "@/actions/billing";
+import { addDevCardAction, confirmCardAction, createSetupIntentAction } from "@/actions/billing";
 
 const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = pk ? loadStripe(pk) : null;
@@ -53,9 +53,10 @@ function CardForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function PaymentMethods({ saved }: { saved: SavedMethod[] }) {
+export function PaymentMethods({ saved, devAdd = false }: { saved: SavedMethod[]; devAdd?: boolean }) {
   const router = useRouter();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -77,7 +78,22 @@ export function PaymentMethods({ saved }: { saved: SavedMethod[] }) {
       )}
 
       {!stripePromise ? (
-        <p className="text-sm opacity-60">Card payments aren&apos;t enabled yet (Stripe keys needed).</p>
+        devAdd ? (
+          <button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await addDevCardAction();
+              router.refresh();
+              setBusy(false);
+            }}
+            className="rounded-lg border border-black/15 px-4 py-2 text-sm hover:bg-black/5 disabled:opacity-60 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            {busy ? "Adding…" : "Add a test card"}
+          </button>
+        ) : (
+          <p className="text-sm opacity-60">Card payments aren&apos;t enabled yet (Stripe keys needed).</p>
+        )
       ) : !clientSecret ? (
         <button
           onClick={async () => {

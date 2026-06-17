@@ -1,5 +1,7 @@
 import { assertRole } from "@/server/auth/guard";
+import { devBypass } from "@/server/config";
 import { listInvoices, listMyPaymentMethods } from "@/server/services/billing";
+import { stripeConfigured } from "@/server/stripe";
 import { payInvoiceAction, payLaterAction } from "@/actions/billing";
 import { PaymentMethods } from "@/components/tenant/payment-methods";
 import { formatCents } from "@/lib/utils";
@@ -23,6 +25,8 @@ export default async function DuesPage() {
     dbReady = false;
   }
   const firstMethod = methods[0]?.id ?? null;
+  // Offline dev: no Stripe → still allow paying (records the payment directly).
+  const canDevPay = !stripeConfigured() && devBypass();
 
   if (!dbReady) {
     return (
@@ -56,10 +60,12 @@ export default async function DuesPage() {
                     </span>
                     {payable && (
                       <div className="flex gap-2">
-                        {firstMethod && (
+                        {(firstMethod || canDevPay) && (
                           <form action={payInvoiceAction}>
                             <input type="hidden" name="invoiceId" value={inv.id} />
-                            <input type="hidden" name="paymentMethodId" value={firstMethod} />
+                            {firstMethod && (
+                              <input type="hidden" name="paymentMethodId" value={firstMethod} />
+                            )}
                             <button className="rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background">
                               Pay
                             </button>
@@ -83,7 +89,7 @@ export default async function DuesPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Payment methods</h2>
-        <PaymentMethods saved={methods} />
+        <PaymentMethods saved={methods} devAdd={canDevPay} />
       </section>
     </div>
   );
