@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { assertRole } from "@/server/auth/guard";
 import { requestDetail } from "@/server/services/requests";
+import { getOrCreateOwnerConversation } from "@/server/services/messaging";
 
 const STATUS: Record<string, string> = {
   received: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
@@ -26,6 +27,15 @@ export default async function RequestDetailPage({
   if (!d) notFound();
   const r = d.request;
   const currentStep = STEPS.indexOf(r.status as (typeof STEPS)[number]);
+
+  // Link straight to the owner↔tenant thread; fall back to the inbox if it can't
+  // be resolved (e.g. unit lost its manager).
+  let convoHref = "/messages";
+  try {
+    convoHref = `/messages/${await getOrCreateOwnerConversation(user.id)}`;
+  } catch {
+    /* keep the inbox fallback */
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -66,6 +76,16 @@ export default async function RequestDetailPage({
         ) : (
           <div className="opacity-60">Not yet assigned — your manager will schedule this.</div>
         )}
+        {d.task?.scheduledAt && (
+          <div>
+            <span className="opacity-60">Scheduled for:</span> {d.task.scheduledAt.toLocaleString()}
+          </div>
+        )}
+        {d.task?.deadline && r.status !== "done" && (
+          <div>
+            <span className="opacity-60">Target date:</span> {d.task.deadline}
+          </div>
+        )}
         {r.status === "done" && (
           <div className="text-emerald-700 dark:text-emerald-300">✅ Resolved</div>
         )}
@@ -100,7 +120,7 @@ export default async function RequestDetailPage({
       )}
 
       <Link
-        href="/messages"
+        href={convoHref}
         className="inline-block text-sm underline opacity-70 hover:opacity-100"
       >
         Message your manager

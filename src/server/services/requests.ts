@@ -61,6 +61,8 @@ export async function requestDetail(userId: string, requestId: string) {
     const [row] = await tx
       .select({
         status: tasks.status,
+        deadline: tasks.deadline,
+        scheduledAt: tasks.scheduledAt,
         handymanName: users.fullName,
         handymanEmail: users.email,
       })

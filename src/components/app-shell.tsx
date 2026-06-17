@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SessionUser } from "@/server/auth/session";
+import { NavLinks } from "./nav-links";
 export interface NavItem {
   href: string;
   label: string;
@@ -23,13 +24,7 @@ export function AppShell({
           <Link href="/" className="font-semibold tracking-tight">
             Abode
           </Link>
-          <nav className="flex gap-4 text-sm">
-            {nav.map((n) => (
-              <Link key={n.href} href={n.href} className="opacity-70 hover:opacity-100">
-                {n.label}
-              </Link>
-            ))}
-          </nav>
+          <NavLinks items={nav} />
           <div className="ml-auto flex items-center gap-3 text-sm">
             <span className="opacity-60">
               {user.fullName ?? user.email} · <span className="capitalize">{user.role}</span>

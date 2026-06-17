@@ -88,17 +88,20 @@ async function main() {
       .insert(units)
       .values({ propertyId: maple.id, unitNumber: "102", tenantId: tom.id, rentAmountCents: 180000, status: "occupied" })
       .returning();
-    await db
+    const [unit103] = await db
       .insert(units)
-      .values({ propertyId: maple.id, unitNumber: "103", rentAmountCents: 195000, status: "vacant" });
+      .values({ propertyId: maple.id, unitNumber: "103", rentAmountCents: 195000, status: "vacant" })
+      .returning();
 
     await db.insert(propertyEmployees).values({ propertyId: maple.id, employeeId: handyman.id, jobCount: 3 });
 
+    // Tenant codes attach to a *unit* (the tenant occupies it). A property-only
+    // tenant code can't be redeemed — see redeemTenantCode.
     await db.insert(inviteCodes).values({
       code: "ABODE-TENANT-103",
       kind: "tenant",
       ownerId: owner.id,
-      propertyId: maple.id,
+      unitId: unit103.id,
     });
 
     console.log("→ Inserting invoices + a payment …");

@@ -171,6 +171,11 @@ export async function assertCodeValid(code: string, kind: "tenant" | "employee")
       .limit(1);
     if (!inv)
       throw new Error(kind === "tenant" ? "Invalid or already-used unit code" : "Invalid or already-used employer code");
+    // The code must point at the thing it'll attach to, or redemption fails *after*
+    // we've already created the account — leaving an orphan user. Reject up front.
+    if (kind === "tenant" && !inv.unitId) throw new Error("This unit code isn't linked to a unit. Ask your manager for a new one.");
+    if (kind === "employee" && !inv.propertyId)
+      throw new Error("This employer code isn't linked to a property. Ask your manager for a new one.");
     return inv;
   });
 }
