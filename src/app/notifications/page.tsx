@@ -1,11 +1,27 @@
 import Link from "next/link";
+import { AlertTriangle, Bell, Check, CheckCircle2, Info } from "lucide-react";
 import { requireUser } from "@/server/auth/guard";
 import type { Role } from "@/server/auth/session";
 import { listNotifications } from "@/server/services/notifications";
 import { markReadAction } from "@/actions/owner";
 import { NotConnected } from "@/components/not-connected";
+import { Card, EmptyState, type Tone } from "@/components/ui";
 
 type Notif = Awaited<ReturnType<typeof listNotifications>>[number];
+
+const TYPE: Record<string, { icon: typeof Info; tone: Tone }> = {
+  urgent: { icon: AlertTriangle, tone: "danger" },
+  success: { icon: CheckCircle2, tone: "success" },
+  info: { icon: Info, tone: "info" },
+};
+const ICON_BG: Record<Tone, string> = {
+  danger: "bg-red-500/15 text-red-600 dark:text-red-400",
+  success: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  info: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  warning: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  brand: "bg-brand/10 text-brand",
+  neutral: "bg-foreground/[0.06] text-muted",
+};
 
 /** Where a notification should take each role when clicked (null = not linkable). */
 function notifHref(role: Role, n: Notif): string | null {
@@ -21,37 +37,46 @@ function notifHref(role: Role, n: Notif): string | null {
   return null;
 }
 
-const SECTIONS: { type: "urgent" | "success" | "info"; label: string; cls: string }[] = [
-  { type: "urgent", label: "Urgent", cls: "text-red-600 dark:text-red-400" },
-  { type: "success", label: "Success", cls: "text-emerald-600 dark:text-emerald-400" },
-  { type: "info", label: "Info", cls: "opacity-80" },
-];
-
 function Row({ n, href }: { n: Notif; href: string | null }) {
-  const content = (
-    <div className="min-w-0">
-      <div className="font-medium">{n.title}</div>
-      {n.body && <div className="text-sm opacity-70">{n.body}</div>}
+  const meta = TYPE[n.type] ?? TYPE.info;
+  const Icon = meta.icon;
+  const body = (
+    <div className="flex min-w-0 flex-1 items-start gap-3">
+      <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${ICON_BG[meta.tone]}`}>
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {!n.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-label="Unread" />}
+          <span className="font-medium">{n.title}</span>
+        </div>
+        {n.body && <p className="mt-0.5 text-sm text-muted">{n.body}</p>}
+        <p className="mt-1 text-xs text-muted">{n.createdAt.toLocaleDateString()}</p>
+      </div>
     </div>
   );
+
   return (
-    <li className={`flex items-start justify-between gap-4 p-3 ${n.readAt ? "opacity-50" : ""}`}>
+    <div className={`flex items-start justify-between gap-3 p-4 ${n.readAt ? "opacity-60" : ""}`}>
       {href ? (
-        <Link href={href} className="min-w-0 flex-1 hover:opacity-80">
-          {content}
+        <Link href={href} className="min-w-0 flex-1 transition hover:opacity-80">
+          {body}
         </Link>
       ) : (
-        content
+        body
       )}
       {!n.readAt && (
         <form action={markReadAction}>
           <input type="hidden" name="id" value={n.id} />
-          <button className="shrink-0 rounded-md border border-black/15 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-            Mark read
+          <button
+            title="Mark read"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-line text-muted transition hover:bg-surface-2 hover:text-foreground"
+          >
+            <Check className="h-4 w-4" />
           </button>
         </form>
       )}
-    </li>
+    </div>
   );
 }
 
@@ -65,33 +90,23 @@ export default async function NotificationsPage() {
     dbReady = false;
   }
 
-  if (!dbReady) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-        <NotConnected />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-      {SECTIONS.map((s) => {
-        const items = all.filter((n) => n.type === s.type);
-        if (items.length === 0) return null;
-        return (
-          <section key={s.type} className="space-y-2">
-            <h2 className={`text-sm font-semibold uppercase tracking-wide ${s.cls}`}>{s.label}</h2>
-            <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/15">
-              {items.map((n) => (
-                <Row key={n.id} n={n} href={notifHref(user.role, n)} />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-      {all.length === 0 && <p className="text-sm opacity-60">No notifications.</p>}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight">Notifications</h1>
+        <p className="mt-1 text-sm text-muted">Updates on your requests, dues, and messages.</p>
+      </div>
+      {!dbReady ? (
+        <NotConnected />
+      ) : all.length === 0 ? (
+        <EmptyState icon={Bell} title="You're all caught up" hint="New updates will show up here." />
+      ) : (
+        <Card className="divide-y divide-line overflow-hidden">
+          {all.map((n) => (
+            <Row key={n.id} n={n} href={notifHref(user.role, n)} />
+          ))}
+        </Card>
+      )}
     </div>
   );
 }

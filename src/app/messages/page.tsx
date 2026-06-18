@@ -1,9 +1,16 @@
 import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 import { requireUser } from "@/server/auth/guard";
 import { getOrCreateOwnerConversation, listConversations } from "@/server/services/messaging";
 import { NotConnected } from "@/components/not-connected";
+import { Badge, Card, EmptyState } from "@/components/ui";
 
 const ROLE_TAG: Record<string, string> = { owner: "manager", employee: "handyman", tenant: "tenant" };
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || name[0]?.toUpperCase() || "?";
+}
 
 export default async function MessagesPage() {
   const user = await requireUser();
@@ -19,32 +26,35 @@ export default async function MessagesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
-        <p className="text-sm opacity-60">Your conversations.</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Messages</h1>
+        <p className="mt-1 text-sm text-muted">Your conversations.</p>
       </div>
       {!dbReady ? (
         <NotConnected />
       ) : convos.length === 0 ? (
-        <p className="text-sm opacity-60">No conversations yet.</p>
+        <EmptyState icon={MessageSquare} title="No conversations yet" hint="Messages with your manager will appear here." />
       ) : (
-        <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/15">
-          {convos.map(({ conversation, other, last }) => (
-            <li key={conversation.id}>
+        <Card className="divide-y divide-line overflow-hidden">
+          {convos.map(({ conversation, other, last }) => {
+            const name = other?.fullName ?? other?.email ?? "Conversation";
+            return (
               <Link
+                key={conversation.id}
                 href={`/messages/${conversation.id}`}
-                className="flex items-center justify-between gap-4 p-4 hover:bg-black/5 dark:hover:bg-white/5"
+                className="flex items-center gap-3 p-4 transition hover:bg-surface-2"
               >
-                <div className="min-w-0">
-                  <div className="font-medium">{other?.fullName ?? other?.email ?? "Conversation"}</div>
-                  <div className="truncate text-sm opacity-60">{last?.body ?? "No messages yet"}</div>
-                </div>
-                <span className="shrink-0 rounded-full bg-zinc-500/15 px-2 py-0.5 text-xs">
-                  {other ? ROLE_TAG[other.role] ?? other.role : ""}
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/10 text-sm font-semibold text-brand">
+                  {initials(name)}
                 </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{name}</div>
+                  <div className="truncate text-sm text-muted">{last?.body ?? "No messages yet"}</div>
+                </div>
+                {other && <Badge tone="neutral">{ROLE_TAG[other.role] ?? other.role}</Badge>}
               </Link>
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </Card>
       )}
     </div>
   );

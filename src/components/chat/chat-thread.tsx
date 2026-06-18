@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { SendHorizontal } from "lucide-react";
 import { sendMessageAction } from "@/actions/messaging";
 
 export interface ChatMessage {
@@ -65,18 +66,18 @@ export function ChatThread({
   }
 
   return (
-    <div className="flex h-[70vh] flex-col rounded-xl border border-black/10 dark:border-white/15">
-      <div className="border-b border-black/10 p-3 font-medium dark:border-white/15">{title}</div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
-        {msgs.length === 0 && <p className="text-sm opacity-50">No messages yet. Say hello.</p>}
+    <div className="flex h-[70vh] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
+      <div className="border-b border-line bg-surface-2/50 px-4 py-3 font-semibold">{title}</div>
+      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+        {msgs.length === 0 && <p className="text-sm text-muted">No messages yet. Say hello.</p>}
         {msgs.map((m) => (
           <div
             key={m.id}
             className={
-              "max-w-[75%] rounded-2xl px-3 py-1.5 text-sm " +
+              "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm " +
               (m.senderId === meId
-                ? "ml-auto bg-foreground text-background"
-                : "mr-auto bg-black/5 dark:bg-white/10")
+                ? "ml-auto rounded-br-md bg-brand text-brand-foreground"
+                : "mr-auto rounded-bl-md bg-surface-2")
             }
           >
             {m.body}
@@ -84,18 +85,19 @@ export function ChatThread({
         ))}
         <div ref={endRef} />
       </div>
-      <form onSubmit={onSubmit} className="flex gap-2 border-t border-black/10 p-3 dark:border-white/15">
+      <form onSubmit={onSubmit} className="flex gap-2 border-t border-line p-3">
         <input
           name="body"
           autoComplete="off"
           placeholder="Message…"
-          className="flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20"
+          className="flex-1 rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
         />
         <button
           disabled={sending}
-          className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-60"
+          aria-label="Send"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-foreground transition hover:brightness-110 disabled:opacity-60"
         >
-          Send
+          <SendHorizontal className="h-[18px] w-[18px]" />
         </button>
       </form>
     </div>

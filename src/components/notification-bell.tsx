@@ -1,10 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Bell } from "lucide-react";
 
 /** Polls the unread count every 15s and links to the notifications page. */
 export function NotificationBell() {
   const [count, setCount] = useState(0);
+  const pathname = usePathname();
+  const active = pathname === "/notifications";
 
   useEffect(() => {
     let alive = true;
@@ -25,13 +29,19 @@ export function NotificationBell() {
       alive = false;
       clearInterval(id);
     };
-  }, []);
+  }, [pathname]);
 
   return (
-    <Link href="/notifications" className="relative opacity-70 hover:opacity-100" aria-label="Notifications">
-      <span aria-hidden>🔔</span>
+    <Link
+      href="/notifications"
+      aria-label={count > 0 ? `Notifications, ${count} unread` : "Notifications"}
+      className={`relative flex h-9 w-9 items-center justify-center rounded-full border border-line transition hover:bg-surface-2 ${
+        active ? "bg-surface-2 text-foreground" : "text-muted"
+      }`}
+    >
+      <Bell className="h-[18px] w-[18px]" />
       {count > 0 && (
-        <span className="absolute -right-2 -top-1 min-w-[1rem] rounded-full bg-red-600 px-1 text-center text-[10px] font-semibold leading-4 text-white">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-background">
           {count > 9 ? "9+" : count}
         </span>
       )}

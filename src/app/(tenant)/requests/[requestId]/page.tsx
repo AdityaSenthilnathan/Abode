@@ -1,20 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft, Check, CheckCircle2, Inbox, MessageSquare, Wrench } from "lucide-react";
 import { assertRole } from "@/server/auth/guard";
 import { requestDetail } from "@/server/services/requests";
 import { getOrCreateOwnerConversation } from "@/server/services/messaging";
+import { Badge, Card, button, requestTone } from "@/components/ui";
 
-const STATUS: Record<string, string> = {
-  received: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  working: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  done: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-};
-const STEPS = ["received", "working", "done"] as const;
-const STEP_LABEL: Record<(typeof STEPS)[number], string> = {
-  received: "Received",
-  working: "In progress",
-  done: "Resolved",
-};
+const STEPS = [
+  { key: "received", label: "Received", icon: Inbox },
+  { key: "working", label: "In progress", icon: Wrench },
+  { key: "done", label: "Resolved", icon: CheckCircle2 },
+] as const;
 
 export default async function RequestDetailPage({
   params,
@@ -26,7 +22,7 @@ export default async function RequestDetailPage({
   const d = await requestDetail(user.id, requestId);
   if (!d) notFound();
   const r = d.request;
-  const currentStep = STEPS.indexOf(r.status as (typeof STEPS)[number]);
+  const current = STEPS.findIndex((s) => s.key === r.status);
 
   // Link straight to the owner↔tenant thread; fall back to the inbox if it can't
   // be resolved (e.g. unit lost its manager).
@@ -37,64 +33,75 @@ export default async function RequestDetailPage({
     /* keep the inbox fallback */
   }
 
+  const stepDetail = (key: string): string | null => {
+    if (key === "received") return `Filed ${r.createdAt.toLocaleDateString()}`;
+    if (key === "working") {
+      if (current < 1) return "Awaiting assignment by your manager";
+      const bits = [d.handymanName ? `Assigned to ${d.handymanName}` : "Being scheduled"];
+      if (d.task?.scheduledAt) bits.push(`Scheduled ${d.task.scheduledAt.toLocaleString()}`);
+      else if (d.task?.deadline) bits.push(`Target ${d.task.deadline}`);
+      return bits.join(" · ");
+    }
+    if (key === "done") return current >= 2 ? "Marked resolved" : "Pending";
+    return null;
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <Link href="/requests" className="text-sm opacity-60 hover:opacity-100">
-          ← Requests
+        <Link href="/requests" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Requests
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Request</h1>
-        <p className="text-sm opacity-60">Filed {r.createdAt.toLocaleDateString()}</p>
+        <div className="mt-3 flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Maintenance request</h1>
+          <Badge tone={requestTone(r.status)}>{r.status}</Badge>
+        </div>
+        <p className="mt-1 text-sm text-muted">Filed {r.createdAt.toLocaleDateString()}</p>
       </div>
 
-      <section className="space-y-3 rounded-xl border border-black/10 p-4 dark:border-white/15">
-        <p>{r.description}</p>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="capitalize opacity-60">{r.urgency} priority</span>
-          <span className={`rounded-full px-2 py-0.5 capitalize ${STATUS[r.status] ?? ""}`}>
-            {r.status}
-          </span>
-        </div>
-      </section>
+      <Card className="space-y-3 p-5">
+        <p className="leading-relaxed">{r.description}</p>
+        <Badge tone={r.urgency === "urgent" || r.urgency === "high" ? "danger" : "neutral"}>
+          {r.urgency} priority
+        </Badge>
+      </Card>
 
-      {/* status timeline */}
-      <ol className="flex items-center gap-2 text-sm">
-        {STEPS.map((s, i) => (
-          <li key={s} className="flex items-center gap-2">
-            <span className={i <= currentStep ? "font-medium" : "opacity-40"}>{STEP_LABEL[s]}</span>
-            {i < STEPS.length - 1 && <span className="opacity-30">→</span>}
-          </li>
-        ))}
-      </ol>
-
-      {/* assignment / resolution */}
-      <section className="grid gap-1 rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
-        {d.handymanName ? (
-          <div>
-            <span className="opacity-60">Assigned to:</span> {d.handymanName}
-          </div>
-        ) : (
-          <div className="opacity-60">Not yet assigned — your manager will schedule this.</div>
-        )}
-        {d.task?.scheduledAt && (
-          <div>
-            <span className="opacity-60">Scheduled for:</span> {d.task.scheduledAt.toLocaleString()}
-          </div>
-        )}
-        {d.task?.deadline && r.status !== "done" && (
-          <div>
-            <span className="opacity-60">Target date:</span> {d.task.deadline}
-          </div>
-        )}
-        {r.status === "done" && (
-          <div className="text-emerald-700 dark:text-emerald-300">✅ Resolved</div>
-        )}
-      </section>
+      {/* progress timeline */}
+      <Card className="p-5">
+        <ol>
+          {STEPS.map((s, i) => {
+            const reached = i <= current;
+            const detail = stepDetail(s.key);
+            return (
+              <li key={s.key} className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <span
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                      reached
+                        ? "border-brand bg-brand text-brand-foreground"
+                        : "border-line bg-surface text-muted"
+                    }`}
+                  >
+                    {i < current ? <Check className="h-4 w-4" /> : <s.icon className="h-4 w-4" />}
+                  </span>
+                  {i < STEPS.length - 1 && (
+                    <span className={`my-1 w-px flex-1 ${i < current ? "bg-brand" : "bg-line"}`} />
+                  )}
+                </div>
+                <div className={`pb-6 ${i === STEPS.length - 1 ? "pb-0" : ""}`}>
+                  <div className={`font-medium ${reached ? "" : "text-muted"}`}>{s.label}</div>
+                  {detail && <div className="mt-0.5 text-sm text-muted">{detail}</div>}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
 
       {/* tenant's uploaded media */}
       {d.media.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-lg font-medium">Your attachments</h2>
+          <h2 className="text-sm font-semibold text-muted">Your attachments</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {d.media.map((m, i) =>
               m.isVideo ? (
@@ -102,15 +109,15 @@ export default async function RequestDetailPage({
                   key={i}
                   src={m.url}
                   controls
-                  className="aspect-square w-full rounded-lg border border-black/10 object-cover dark:border-white/15"
+                  className="aspect-square w-full rounded-xl border border-line object-cover"
                 />
               ) : (
-                <a key={i} href={m.url} target="_blank" rel="noreferrer">
+                <a key={i} href={m.url} target="_blank" rel="noreferrer" className="group">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={m.url}
                     alt={`Attachment ${i + 1}`}
-                    className="aspect-square w-full rounded-lg border border-black/10 object-cover dark:border-white/15"
+                    className="aspect-square w-full rounded-xl border border-line object-cover transition group-hover:opacity-90"
                   />
                 </a>
               ),
@@ -119,11 +126,8 @@ export default async function RequestDetailPage({
         </section>
       )}
 
-      <Link
-        href={convoHref}
-        className="inline-block text-sm underline opacity-70 hover:opacity-100"
-      >
-        Message your manager
+      <Link href={convoHref} className={button.secondary}>
+        <MessageSquare className="h-4 w-4" /> Message your manager
       </Link>
     </div>
   );

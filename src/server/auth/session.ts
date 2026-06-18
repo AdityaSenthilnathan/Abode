@@ -6,6 +6,7 @@ import type { AuthenticationResultType } from "@aws-sdk/client-cognito-identity-
 import { db } from "@/server/db/client";
 import { users } from "@db/schema";
 import { verifyAccessToken } from "./verify";
+import { cognitoRefresh } from "./cognito";
 
 export type Role = "owner" | "employee" | "tenant";
 
@@ -62,7 +63,26 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       const u = await userBySub(claims.sub);
       if (u) return u;
     } catch {
-      // expired/invalid — fall through (refresh is handled on next login for now)
+      // access token expired/invalid — try the refresh token below.
+    }
+  }
+
+  // Keep a real session alive past access-token expiry instead of bouncing the
+  // user to /login. We can't persist the rotated token here (cookies are
+  // read-only during render), so the next login or token-setting Server Action
+  // re-seeds the cookie; until then this refreshes per request.
+  const rt = jar.get(RT)?.value;
+  const un = jar.get(UN)?.value;
+  if (rt && un) {
+    try {
+      const refreshed = await cognitoRefresh(rt, un);
+      if (refreshed?.AccessToken) {
+        const claims = await verifyAccessToken(refreshed.AccessToken);
+        const u = await userBySub(claims.sub);
+        if (u) return u;
+      }
+    } catch {
+      // refresh token revoked/expired — fall through to dev/null.
     }
   }
 

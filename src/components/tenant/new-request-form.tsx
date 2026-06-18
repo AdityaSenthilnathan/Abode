@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Upload, X } from "lucide-react";
 import { submitRequestAction } from "@/actions/requests";
+import { button } from "@/components/ui";
 
 const input =
-  "rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50";
+  "rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none transition focus:border-brand";
 
 const MAX_FILES = 10;
 
@@ -107,13 +109,19 @@ export function NewRequestForm() {
 
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1.5 text-sm font-medium">
         Description
-        <textarea name="description" required rows={4} placeholder="What's wrong?" className={input} />
+        <textarea
+          name="description"
+          required
+          rows={4}
+          placeholder="What's wrong?"
+          className={`${input} font-normal`}
+        />
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1.5 text-sm font-medium">
         Urgency
-        <select name="urgency" defaultValue="med" className={input}>
+        <select name="urgency" defaultValue="med" className={`${input} font-normal`}>
           <option value="low">Low</option>
           <option value="med">Medium</option>
           <option value="high">High</option>
@@ -122,7 +130,7 @@ export function NewRequestForm() {
       </label>
 
       <div className="grid gap-2 text-sm">
-        <span>Photos / video (optional)</span>
+        <span className="font-medium">Photos / video (optional)</span>
         <div
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => {
@@ -131,14 +139,15 @@ export function NewRequestForm() {
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-8 text-center transition-colors ${
-            dragOver
-              ? "border-black/50 bg-black/5 dark:border-white/60 dark:bg-white/10"
-              : "border-black/20 hover:bg-black/[0.03] dark:border-white/25 dark:hover:bg-white/5"
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition-colors ${
+            dragOver ? "border-brand bg-brand/5" : "border-line hover:bg-surface-2"
           }`}
         >
-          <span className="text-sm font-medium">Drag &amp; drop, or click to choose</span>
-          <span className="mt-1 text-xs opacity-60">Up to {MAX_FILES} photos or videos</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/10 text-brand">
+            <Upload className="h-5 w-5" />
+          </span>
+          <span className="font-medium">Drag &amp; drop, or click to choose</span>
+          <span className="text-xs text-muted">Up to {MAX_FILES} photos or videos</span>
           <input
             ref={fileInputRef}
             type="file"
@@ -157,7 +166,7 @@ export function NewRequestForm() {
             {items.map((it, i) => (
               <div
                 key={`${it.file.name}-${it.file.size}`}
-                className="group relative aspect-square overflow-hidden rounded-lg border border-black/10 dark:border-white/15"
+                className="group relative aspect-square overflow-hidden rounded-xl border border-line"
               >
                 {it.isImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -169,9 +178,9 @@ export function NewRequestForm() {
                   type="button"
                   onClick={() => removeAt(i)}
                   aria-label={`Remove ${it.file.name}`}
-                  className="absolute right-1 top-1 rounded-full bg-black/70 px-1.5 text-xs leading-5 text-white hover:bg-black"
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black"
                 >
-                  ✕
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
@@ -180,12 +189,9 @@ export function NewRequestForm() {
         {notice && <p className="text-xs text-amber-600 dark:text-amber-400">{notice}</p>}
       </div>
 
-      {status && <p className="text-sm opacity-60">{status}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        disabled={busy}
-        className="rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background disabled:opacity-60"
-      >
+      {status && <p className="text-sm text-muted">{status}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      <button disabled={busy} className={`${button.primary} w-full`}>
         {busy ? "Working…" : "Submit request"}
       </button>
     </form>
