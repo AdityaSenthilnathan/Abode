@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
 import { conversations, maintenanceRequests, messages, properties, taskReceipts, tasks, units, users } from "@db/schema";
 import type { Task } from "@db/schema";
@@ -37,6 +37,8 @@ export interface ConversationListItem {
 
 /** Conversation list enriched with the other party, last message, and (handyman) waiting status. */
 export async function listConversationsForUser(userId: string, role: string): Promise<ConversationListItem[]> {
+  // Seeing the inbox = the messages reached you → mark them delivered.
+  await markDelivered(userId);
   return withUser(userId, async (tx) => {
     const convos = await tx.select().from(conversations);
     if (convos.length === 0) return [];
@@ -123,6 +125,44 @@ export async function listConversations(userId: string) {
   });
 }
 
+/**
+ * Mark the other participant's messages in a conversation as read by `userId`
+ * (and delivered if not already). Uses asAdmin: RLS only lets a user write rows
+ * they sent, but read receipts flip the recipient's columns on the sender's rows.
+ */
+export async function markRead(userId: string, conversationId: string) {
+  return asAdmin((tx) =>
+    tx
+      .update(messages)
+      .set({ readAt: new Date(), deliveredAt: sql`coalesce(${messages.deliveredAt}, now())` })
+      .where(
+        and(eq(messages.conversationId, conversationId), ne(messages.senderId, userId), isNull(messages.readAt)),
+      ),
+  );
+}
+
+/** Mark every incoming, not-yet-delivered message across the user's conversations as delivered. */
+export async function markDelivered(userId: string) {
+  return asAdmin((tx) =>
+    tx
+      .update(messages)
+      .set({ deliveredAt: new Date() })
+      .where(
+        and(
+          ne(messages.senderId, userId),
+          isNull(messages.deliveredAt),
+          inArray(
+            messages.conversationId,
+            tx
+              .select({ id: conversations.id })
+              .from(conversations)
+              .where(or(eq(conversations.participantA, userId), eq(conversations.participantB, userId))),
+          ),
+        ),
+      ),
+  );
+}
+
 /** A full thread (messages + the other party's name). Null if not a participant (RLS). */
 export async function getThread(userId: string, conversationId: string) {
   return withUser(userId, async (tx) => {
@@ -134,6 +174,8 @@ export async function getThread(userId: string, conversationId: string) {
       .from(users)
       .where(eq(users.id, otherId))
       .limit(1);
+    // Viewing the thread = reading the other party's messages.
+    await markRead(userId, conversationId);
     const msgs = await tx
       .select()
       .from(messages)

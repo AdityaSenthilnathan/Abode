@@ -290,6 +290,8 @@ export const messages = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     body: text().notNull(),
     sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    deliveredAt: timestamp({ withTimezone: true }),
+    readAt: timestamp({ withTimezone: true }),
   },
   (t) => [index("messages_conversation_id_sent_at_idx").on(t.conversationId, t.sentAt)],
 );

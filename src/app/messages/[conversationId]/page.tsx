@@ -25,7 +25,13 @@ export default async function Thread({
         title={thread.otherName}
         role={user.role}
         job={job}
-        messages={thread.messages.map((m) => ({ id: m.id, body: m.body, senderId: m.senderId }))}
+        messages={thread.messages.map((m) => ({
+          id: m.id,
+          body: m.body,
+          senderId: m.senderId,
+          deliveredAt: m.deliveredAt ? new Date(m.deliveredAt).toISOString() : null,
+          readAt: m.readAt ? new Date(m.readAt).toISOString() : null,
+        }))}
       />
     </div>
   );
