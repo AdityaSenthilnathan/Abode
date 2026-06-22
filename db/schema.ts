@@ -232,6 +232,7 @@ export const tasks = pgTable(
     estimateCents: integer(),
     estimateApprovedAt: timestamp({ withTimezone: true }),
     finalCostCents: integer(),
+    completedAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [

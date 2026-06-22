@@ -1,8 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, MessageSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  MapPin,
+  MessageSquare,
+  Receipt,
+  Wrench,
+} from "lucide-react";
 import { assertRole } from "@/server/auth/guard";
 import { jobDetail } from "@/server/services/handyman";
+import { Card } from "@/components/ui";
 import {
   acceptJobAction,
   declineJobAction,
@@ -29,6 +41,50 @@ export default async function JobDetailPage({ params }: { params: Promise<{ task
   const lat = d.property?.lat != null ? Number(d.property.lat) : null;
   const lng = d.property?.lng != null ? Number(d.property.lng) : null;
   const showMap = !!token && lat != null && lng != null;
+
+  // Project timeline — each step is reached once its condition holds.
+  const steps = [
+    {
+      label: "Assigned",
+      icon: ClipboardList,
+      reached: true,
+      detail: `${d.ownerName ? `By ${d.ownerName} · ` : ""}${t.createdAt.toLocaleDateString()}`,
+    },
+    {
+      label: "Accepted",
+      icon: Wrench,
+      reached: t.status !== "open",
+      detail: t.status !== "open" ? "Job accepted" : "Awaiting your acceptance",
+    },
+    {
+      label: "Estimate sent",
+      icon: FileText,
+      reached: t.estimateCents != null,
+      detail: t.estimateCents != null ? `${formatCents(t.estimateCents)} sent` : "Not sent yet",
+    },
+    {
+      label: "Estimate approved",
+      icon: CheckCircle2,
+      reached: t.estimateApprovedAt != null,
+      detail:
+        t.estimateApprovedAt != null
+          ? `Approved ${t.estimateApprovedAt.toLocaleDateString()}`
+          : "Awaiting manager approval",
+    },
+    {
+      label: "Work completed",
+      icon: Receipt,
+      reached: t.finalCostCents != null,
+      detail: t.finalCostCents != null ? `Final cost ${formatCents(t.finalCostCents)}` : "In progress",
+    },
+    {
+      label: "Signed off",
+      icon: BadgeCheck,
+      reached: t.status === "done",
+      detail: t.status === "done" ? "Manager signed off — job closed" : "Awaiting sign-off",
+    },
+  ];
+  const current = steps.map((s) => s.reached).lastIndexOf(true);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -68,6 +124,36 @@ export default async function JobDetailPage({ params }: { params: Promise<{ task
             {d.mediaUrls.length > 0 && <div className="opacity-60">{d.mediaUrls.length} attachment(s) from tenant</div>}
             <div><span className="opacity-60">Status:</span> <span className="capitalize">{t.status}</span></div>
           </section>
+
+          {/* project timeline */}
+          <Card className="p-5">
+            <div className="mb-4 text-sm font-semibold tracking-tight">Project timeline</div>
+            <ol>
+              {steps.map((s, i) => {
+                const Icon = s.icon;
+                return (
+                  <li key={s.label} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                          s.reached ? "border-brand bg-brand text-brand-foreground" : "border-line bg-surface text-muted"
+                        }`}
+                      >
+                        {i < current ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                      </span>
+                      {i < steps.length - 1 && (
+                        <span className={`my-1 w-px flex-1 ${i < current ? "bg-brand" : "bg-line"}`} />
+                      )}
+                    </div>
+                    <div className={i === steps.length - 1 ? "" : "pb-6"}>
+                      <div className={`font-medium ${s.reached ? "" : "text-muted"}`}>{s.label}</div>
+                      {s.detail && <div className="mt-0.5 text-sm text-muted">{s.detail}</div>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </Card>
 
           {/* workflow */}
           {t.status === "open" && (

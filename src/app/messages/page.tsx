@@ -46,7 +46,7 @@ export default async function MessagesPage({
           hint="Messages with your manager and tenants will appear here."
         />
       ) : (
-        <MessagesList items={convos} selected={selected} />
+        <MessagesList items={convos} selected={selected} role={user.role} />
       )}
     </div>
   );

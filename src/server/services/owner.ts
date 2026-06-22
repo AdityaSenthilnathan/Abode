@@ -262,7 +262,7 @@ export function acceptCompletion(ownerId: string, taskId: string) {
       .where(eq(tasks.id, taskId))
       .limit(1);
     if (!row || row.ownerId !== ownerId) throw new Error("Task not found");
-    await tx.update(tasks).set({ status: "done" }).where(eq(tasks.id, taskId));
+    await tx.update(tasks).set({ status: "done", completedAt: new Date() }).where(eq(tasks.id, taskId));
     if (row.task.requestId) {
       const [req] = await tx
         .update(maintenanceRequests)

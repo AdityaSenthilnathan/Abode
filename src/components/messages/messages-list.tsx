@@ -7,18 +7,21 @@ import { Card } from "@/components/ui";
 
 const ROLE_TAG: Record<string, string> = { owner: "manager", employee: "handyman", tenant: "tenant" };
 
-type Filter = "all" | "managers" | "tenants";
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "managers", label: "Managers" },
-  { key: "tenants", label: "Tenants" },
-];
-
-function matchesFilter(item: ConversationListItem, f: Filter) {
-  if (f === "all") return true;
-  if (f === "managers") return item.otherRole === "owner";
-  return item.otherRole === "tenant";
-}
+// The two role buckets a viewer can filter by depend on who they talk to.
+const FILTER_BUCKETS: Record<string, { label: string; role: string }[]> = {
+  employee: [
+    { label: "Managers", role: "owner" },
+    { label: "Tenants", role: "tenant" },
+  ],
+  owner: [
+    { label: "Handymen", role: "employee" },
+    { label: "Tenants", role: "tenant" },
+  ],
+  tenant: [
+    { label: "Owners", role: "owner" },
+    { label: "Handymen", role: "employee" },
+  ],
+};
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -34,11 +37,14 @@ export interface SelectedJob {
 export function MessagesList({
   items,
   selected,
+  role,
 }: {
   items: ConversationListItem[];
   selected: SelectedJob | null;
+  role: string;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState("all");
+  const options = [{ label: "All", role: "all" }, ...(FILTER_BUCKETS[role] ?? FILTER_BUCKETS.employee)];
 
   // Selecting a job (or clearing it with ✕) returns to the All view, as the
   // component persists across soft navigation between /messages and /messages?job=.
@@ -47,7 +53,7 @@ export function MessagesList({
   }, [selected?.taskId]);
 
   const selectedIds = new Set(selected?.conversationIds ?? []);
-  const visible = items.filter((i) => matchesFilter(i, filter));
+  const visible = items.filter((i) => filter === "all" || i.otherRole === filter);
   // Pin the selected job's conversations to the top.
   const sorted = [...visible].sort((a, b) => Number(selectedIds.has(b.id)) - Number(selectedIds.has(a.id)));
 
@@ -55,16 +61,16 @@ export function MessagesList({
     <div className="space-y-4">
       {/* Filter toggle */}
       <div className="inline-flex rounded-xl border border-line bg-surface p-1 text-sm">
-        {FILTERS.map((f) => (
+        {options.map((o) => (
           <button
-            key={f.key}
+            key={o.role}
             type="button"
-            onClick={() => setFilter(f.key)}
+            onClick={() => setFilter(o.role)}
             className={`rounded-lg px-3 py-1.5 font-medium transition ${
-              filter === f.key ? "bg-brand text-brand-foreground shadow-sm" : "text-muted hover:text-foreground"
+              filter === o.role ? "bg-brand text-brand-foreground shadow-sm" : "text-muted hover:text-foreground"
             }`}
           >
-            {f.label}
+            {o.label}
           </button>
         ))}
       </div>

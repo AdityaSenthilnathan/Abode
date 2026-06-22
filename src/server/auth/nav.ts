@@ -16,6 +16,7 @@ export function navForRole(role: Role): NavItem[] {
       return [
         { href: "/jobs", label: "Jobs" },
         { href: "/map", label: "Map" },
+        { href: "/earnings", label: "Earnings" },
         { href: "/messages", label: "Messages" },
       ];
     case "tenant":

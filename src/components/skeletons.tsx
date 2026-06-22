@@ -28,8 +28,18 @@ export function JobsSkeleton() {
   return (
     <div className="animate-pulse space-y-6" aria-hidden>
       <PageHeader titleW="w-24" subW="w-80" />
-      <Bar className="h-9 w-full rounded-lg bg-foreground/[0.04]" />
       <div className="space-y-3">
+        {/* location banner */}
+        <Bar className="h-9 w-full rounded-lg bg-foreground/[0.04]" />
+        {/* status filter + sort bar */}
+        <div className="flex items-center justify-between gap-2">
+          <Bar className="h-9 w-72 rounded-xl bg-foreground/[0.06]" />
+          <div className="flex items-center gap-2">
+            <Bar className="h-[30px] w-28 rounded-lg bg-foreground/[0.06]" />
+            <Bar className="h-[30px] w-[30px] rounded-lg bg-foreground/[0.06]" />
+          </div>
+        </div>
+        {/* cards */}
         {Array.from({ length: 2 }).map((_, i) => (
           <div key={i} className="rounded-2xl border border-line bg-surface p-4">
             <div className="flex items-start justify-between gap-3">
@@ -39,14 +49,11 @@ export function JobsSkeleton() {
               </div>
               <Bar className="h-5 w-16 rounded-full bg-foreground/[0.06]" />
             </div>
-            <div className="mt-3 flex gap-1.5">
+            <div className="mt-2.5 flex items-center gap-1.5">
               <Bar className="h-6 w-16 rounded-full bg-foreground/[0.06]" />
               <Bar className="h-6 w-24 rounded-full bg-foreground/[0.06]" />
-            </div>
-            <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-              <Bar className="h-7 w-16 rounded-lg bg-foreground/[0.06]" />
-              <Bar className="h-7 w-16 rounded-lg bg-foreground/[0.06]" />
               <Bar className="ml-auto h-7 w-16 rounded-lg bg-foreground/[0.06]" />
+              <Bar className="h-7 w-16 rounded-lg bg-foreground/[0.06]" />
             </div>
           </div>
         ))}
@@ -104,6 +111,58 @@ export function MessagesSkeleton() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- earnings */
+export function EarningsSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6" aria-hidden>
+      <PageHeader titleW="w-32" subW="w-80" />
+      <div className="flex items-center justify-between">
+        <Bar className="h-10 w-80 rounded-xl bg-foreground/[0.06]" />
+        <Bar className="h-10 w-40 rounded-xl bg-foreground/[0.06]" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+        <div className="rounded-2xl border border-line bg-surface p-5">
+          <div className="mb-5 flex items-center justify-between">
+            <div className="space-y-2">
+              <Bar className="h-3 w-32 bg-foreground/[0.06]" />
+              <Bar className="h-7 w-28" />
+            </div>
+            <Bar className="h-9 w-20 rounded-lg bg-foreground/[0.06]" />
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="h-40 w-40 shrink-0 rounded-full border-[15px] border-foreground/[0.06]" />
+            <div className="flex-1 space-y-2.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Bar key={i} className="h-4 w-full bg-foreground/[0.06]" />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+            <Bar className="h-4 w-24" />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Bar key={i} className="h-3 w-full bg-foreground/[0.06]" />
+            ))}
+          </div>
+          <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+            <Bar className="h-4 w-32" />
+            <Bar className="h-12 w-full rounded-xl bg-foreground/[0.06]" />
+          </div>
+        </div>
+      </div>
+      <div className="space-y-3">
+        <Bar className="h-4 w-40" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-xl border border-line bg-surface" />
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { SendHorizontal } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, SendHorizontal } from "lucide-react";
 import { sendMessageAction } from "@/actions/messaging";
+import type { ConversationJob } from "@/server/services/messaging";
+import { JobActionBar } from "./job-action-bar";
 
 export interface ChatMessage {
   id: string;
@@ -15,11 +18,15 @@ export function ChatThread({
   meId,
   title,
   messages,
+  job,
+  role,
 }: {
   conversationId: string;
   meId: string;
   title: string;
   messages: ChatMessage[];
+  job: ConversationJob | null;
+  role: string;
 }) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
@@ -67,7 +74,18 @@ export function ChatThread({
 
   return (
     <div className="flex h-[70vh] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
-      <div className="border-b border-line bg-surface-2/50 px-4 py-3 font-semibold">{title}</div>
+      <div className="flex items-center gap-2 border-b border-line bg-surface-2/50 px-3 py-3">
+        <Link
+          href="/messages"
+          aria-label="Back to messages"
+          title="Back to messages"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition hover:bg-surface-2 hover:text-foreground"
+        >
+          <ArrowLeft className="h-[18px] w-[18px]" />
+        </Link>
+        <span className="font-semibold">{title}</span>
+      </div>
+      {job && <JobActionBar job={job} role={role} conversationId={conversationId} />}
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {msgs.length === 0 && <p className="text-sm text-muted">No messages yet. Say hello.</p>}
         {msgs.map((m) => (

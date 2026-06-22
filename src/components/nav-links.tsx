@@ -11,6 +11,7 @@ import {
   Map,
   MessageSquare,
   Ticket,
+  Wallet,
   Wrench,
 } from "lucide-react";
 import type { NavItem } from "./app-shell";
@@ -27,6 +28,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   "/invites": Ticket,
   "/jobs": Briefcase,
   "/map": Map,
+  "/earnings": Wallet,
 };
 
 /**

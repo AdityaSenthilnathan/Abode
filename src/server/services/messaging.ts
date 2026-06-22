@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
-import { conversations, maintenanceRequests, messages, properties, tasks, units, users } from "@db/schema";
+import { conversations, maintenanceRequests, messages, properties, taskReceipts, tasks, units, users } from "@db/schema";
 import type { Task } from "@db/schema";
 
 /**
@@ -127,6 +127,36 @@ export async function getThread(userId: string, conversationId: string) {
       .where(eq(messages.conversationId, conversationId))
       .orderBy(asc(messages.sentAt));
     return { conversation: c, otherName: other?.fullName ?? other?.email ?? "Conversation", messages: msgs };
+  });
+}
+
+export interface ConversationJob {
+  taskId: string;
+  title: string | null;
+  status: "open" | "accepted" | "done";
+  estimateCents: number | null;
+  estimateApproved: boolean;
+  finalCostCents: number | null;
+  receiptCount: number;
+}
+
+/** The job (task) a conversation is about, with enough state to drive the in-chat workflow. Null if the chat isn't task-linked. */
+export async function getConversationJob(userId: string, conversationId: string): Promise<ConversationJob | null> {
+  return withUser(userId, async (tx) => {
+    const [c] = await tx.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
+    if (!c?.taskId) return null;
+    const [task] = await tx.select().from(tasks).where(eq(tasks.id, c.taskId)).limit(1);
+    if (!task) return null;
+    const receipts = await tx.select({ id: taskReceipts.id }).from(taskReceipts).where(eq(taskReceipts.taskId, c.taskId));
+    return {
+      taskId: task.id,
+      title: task.title,
+      status: task.status,
+      estimateCents: task.estimateCents,
+      estimateApproved: task.estimateApprovedAt != null,
+      finalCostCents: task.finalCostCents,
+      receiptCount: receipts.length,
+    };
   });
 }
 

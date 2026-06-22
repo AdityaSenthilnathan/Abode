@@ -15,6 +15,13 @@
       "when": 1782108138609,
       "tag": "0001_sturdy_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782161277814,
+      "tag": "0002_jittery_ghost_rider",
+      "breakpoints": true
     }
   ]
 }
