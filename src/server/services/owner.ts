@@ -17,51 +17,64 @@ import {
 export async function ownerGrid(ownerId: string) {
   return withUser(ownerId, async (tx) => {
     const us = await tx.select().from(units);
-    const out = [];
-    for (const u of us) {
-      let tenantName: string | null = null;
-      if (u.tenantId) {
-        const [t] = await tx
-          .select({ fullName: users.fullName, email: users.email })
+    if (us.length === 0) return [];
+
+    // Batch what used to be two queries *per unit* (tenant name + open-request
+    // count) into one query each — avoids the N+1 round-trips that dominated
+    // the owner dashboard's load time.
+    const tenantIds = [...new Set(us.map((u) => u.tenantId).filter((id): id is string => !!id))];
+    const unitIds = us.map((u) => u.id);
+
+    const tenantRows = tenantIds.length
+      ? await tx
+          .select({ id: users.id, fullName: users.fullName, email: users.email })
           .from(users)
-          .where(eq(users.id, u.tenantId))
-          .limit(1);
-        tenantName = t?.fullName ?? t?.email ?? null;
-      }
-      const [open] = await tx
-        .select({ n: count() })
-        .from(maintenanceRequests)
-        .where(and(eq(maintenanceRequests.unitId, u.id), ne(maintenanceRequests.status, "done")));
-      out.push({ unit: u, tenantName, openRequests: Number(open?.n ?? 0) });
-    }
-    return out.sort((a, b) =>
-      b.unit.unitNumber.localeCompare(a.unit.unitNumber, undefined, { numeric: true }),
-    );
+          .where(inArray(users.id, tenantIds))
+      : [];
+    const openRows = await tx
+      .select({ unitId: maintenanceRequests.unitId, n: count() })
+      .from(maintenanceRequests)
+      .where(and(inArray(maintenanceRequests.unitId, unitIds), ne(maintenanceRequests.status, "done")))
+      .groupBy(maintenanceRequests.unitId);
+
+    const nameById = new Map(tenantRows.map((t) => [t.id, t.fullName ?? t.email ?? null] as const));
+    const openById = new Map(openRows.map((o) => [o.unitId, Number(o.n)] as const));
+
+    return us
+      .map((u) => ({
+        unit: u,
+        tenantName: u.tenantId ? nameById.get(u.tenantId) ?? null : null,
+        openRequests: openById.get(u.id) ?? 0,
+      }))
+      .sort((a, b) => b.unit.unitNumber.localeCompare(a.unit.unitNumber, undefined, { numeric: true }));
   });
 }
 
 /** Headline dashboard metrics (all RLS-scoped to this owner). */
 export async function ownerStats(ownerId: string) {
   return withUser(ownerId, async (tx) => {
-    const [rev] = await tx
-      .select({ s: sql<number>`coalesce(sum(${invoices.amountCents}),0)` })
-      .from(invoices)
-      .where(eq(invoices.status, "paid"));
-    const [unpaid] = await tx
-      .select({ n: count() })
-      .from(invoices)
-      .where(inArray(invoices.status, ["unpaid", "late"]));
-    const [openFixes] = await tx.select({ n: count() }).from(tasks).where(ne(tasks.status, "done"));
-    const [exp] = await tx
-      .select({ s: sql<number>`coalesce(sum(${tasks.finalCostCents}),0)` })
-      .from(tasks)
-      .where(eq(tasks.status, "done"));
+    // Collapse the five single-metric queries into three by computing both
+    // invoice metrics in one pass and both task metrics in another with FILTER.
+    // (Queries in one transaction share a connection and run serially, so fewer
+    // statements = fewer round-trips.)
+    const [inv] = await tx
+      .select({
+        revenue: sql<number>`coalesce(sum(${invoices.amountCents}) filter (where ${invoices.status} = 'paid'), 0)`,
+        unpaid: sql<number>`count(*) filter (where ${invoices.status} in ('unpaid', 'late'))`,
+      })
+      .from(invoices);
+    const [tk] = await tx
+      .select({
+        openFixes: sql<number>`count(*) filter (where ${tasks.status} <> 'done')`,
+        expenses: sql<number>`coalesce(sum(${tasks.finalCostCents}) filter (where ${tasks.status} = 'done'), 0)`,
+      })
+      .from(tasks);
     const [emp] = await tx.select({ n: count() }).from(propertyEmployees);
     return {
-      revenueCents: Number(rev?.s ?? 0),
-      unpaidCount: Number(unpaid?.n ?? 0),
-      openFixes: Number(openFixes?.n ?? 0),
-      expensesCents: Number(exp?.s ?? 0),
+      revenueCents: Number(inv?.revenue ?? 0),
+      unpaidCount: Number(inv?.unpaid ?? 0),
+      openFixes: Number(tk?.openFixes ?? 0),
+      expensesCents: Number(tk?.expenses ?? 0),
       employeeCount: Number(emp?.n ?? 0),
     };
   });

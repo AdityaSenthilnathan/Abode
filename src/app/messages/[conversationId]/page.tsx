@@ -10,9 +10,12 @@ export default async function Thread({
 }) {
   const { conversationId } = await params;
   const user = await requireUser();
-  const thread = await getThread(user.id, conversationId);
+  // Independent reads on separate pooled connections — fetch concurrently.
+  const [thread, job] = await Promise.all([
+    getThread(user.id, conversationId),
+    getConversationJob(user.id, conversationId),
+  ]);
   if (!thread) notFound();
-  const job = await getConversationJob(user.id, conversationId);
 
   return (
     <div className="mx-auto max-w-2xl">

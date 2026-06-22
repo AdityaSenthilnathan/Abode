@@ -157,47 +157,41 @@ export function listJobs(handymanId: string) {
 /** Full job detail: property, owner, originating request + tenant, receipts. */
 export async function jobDetail(handymanId: string, taskId: string) {
   return withUser(handymanId, async (tx) => {
-    const [task] = await tx
-      .select()
+    // Task + its property + the property owner's name in one query (was three).
+    const [row] = await tx
+      .select({ task: tasks, property: properties, ownerName: users.fullName, ownerEmail: users.email })
       .from(tasks)
+      .innerJoin(properties, eq(properties.id, tasks.propertyId))
+      .leftJoin(users, eq(users.id, properties.ownerId))
       .where(and(eq(tasks.id, taskId), eq(tasks.assignedTo, handymanId)))
       .limit(1);
-    if (!task) return null;
-
-    const [property] = await tx.select().from(properties).where(eq(properties.id, task.propertyId)).limit(1);
-    let ownerName: string | null = null;
-    if (property) {
-      const [o] = await tx
-        .select({ fullName: users.fullName, email: users.email })
-        .from(users)
-        .where(eq(users.id, property.ownerId))
-        .limit(1);
-      ownerName = o?.fullName ?? o?.email ?? null;
-    }
+    if (!row) return null;
+    const { task, property } = row;
+    const ownerName = row.ownerName ?? row.ownerEmail ?? null;
 
     let unitNumber: string | null = null;
     let tenantName: string | null = null;
     let requestDesc: string | null = null;
     let mediaUrls: string[] = [];
     if (task.requestId) {
+      // Request + unit + tenant name in one query (was two).
       const [r] = await tx
-        .select({ req: maintenanceRequests, unitNumber: units.unitNumber, tenantId: units.tenantId })
+        .select({
+          req: maintenanceRequests,
+          unitNumber: units.unitNumber,
+          tenantName: users.fullName,
+          tenantEmail: users.email,
+        })
         .from(maintenanceRequests)
         .innerJoin(units, eq(units.id, maintenanceRequests.unitId))
+        .leftJoin(users, eq(users.id, units.tenantId))
         .where(eq(maintenanceRequests.id, task.requestId))
         .limit(1);
       if (r) {
         unitNumber = r.unitNumber;
         requestDesc = r.req.description;
         mediaUrls = r.req.mediaUrls;
-        if (r.tenantId) {
-          const [t] = await tx
-            .select({ fullName: users.fullName, email: users.email })
-            .from(users)
-            .where(eq(users.id, r.tenantId))
-            .limit(1);
-          tenantName = t?.fullName ?? t?.email ?? null;
-        }
+        tenantName = r.tenantName ?? r.tenantEmail ?? null;
       }
     }
 

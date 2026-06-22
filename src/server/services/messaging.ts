@@ -39,6 +39,7 @@ export interface ConversationListItem {
 export async function listConversationsForUser(userId: string, role: string): Promise<ConversationListItem[]> {
   return withUser(userId, async (tx) => {
     const convos = await tx.select().from(conversations);
+    if (convos.length === 0) return [];
 
     // Load linked tasks once (only the handyman view derives a workflow status).
     const taskMap = new Map<string, Task>();
@@ -48,25 +49,30 @@ export async function listConversationsForUser(userId: string, role: string): Pr
       for (const t of ts) taskMap.set(t.id, t);
     }
 
-    const out: (ConversationListItem & { lastAt: number })[] = [];
-    for (const c of convos) {
-      const otherId = c.participantA === userId ? c.participantB : c.participantA;
-      const [other] = await tx
-        .select({ fullName: users.fullName, email: users.email, role: users.role })
-        .from(users)
-        .where(eq(users.id, otherId))
-        .limit(1);
-      const [last] = await tx
-        .select()
-        .from(messages)
-        .where(eq(messages.conversationId, c.id))
-        .orderBy(desc(messages.sentAt))
-        .limit(1);
+    // Batch the former per-conversation lookups: all "other" participants in one
+    // query, and the latest message per conversation via DISTINCT ON — instead
+    // of 2 queries for every conversation in the list.
+    const otherIds = [...new Set(convos.map((c) => (c.participantA === userId ? c.participantB : c.participantA)))];
+    const convoIds = convos.map((c) => c.id);
+    const userRows = await tx
+      .select({ id: users.id, fullName: users.fullName, email: users.email, role: users.role })
+      .from(users)
+      .where(inArray(users.id, otherIds));
+    const lastRows = await tx
+      .selectDistinctOn([messages.conversationId])
+      .from(messages)
+      .where(inArray(messages.conversationId, convoIds))
+      .orderBy(messages.conversationId, desc(messages.sentAt));
+    const userById = new Map(userRows.map((u) => [u.id, u] as const));
+    const lastByConvo = new Map(lastRows.map((m) => [m.conversationId, m] as const));
 
+    const out = convos.map((c) => {
+      const otherId = c.participantA === userId ? c.participantB : c.participantA;
+      const other = userById.get(otherId);
+      const last = lastByConvo.get(c.id);
       const task = c.taskId ? taskMap.get(c.taskId) : undefined;
       const wait = role === "employee" && task ? handymanWait(task, other?.role === "tenant") : null;
-
-      out.push({
+      return {
         id: c.id,
         otherName: other?.fullName ?? other?.email ?? "Conversation",
         otherRole: other?.role ?? null,
@@ -75,8 +81,8 @@ export async function listConversationsForUser(userId: string, role: string): Pr
         taskTitle: task?.title ?? null,
         wait,
         lastAt: last?.sentAt ? new Date(last.sentAt).getTime() : 0,
-      });
-    }
+      };
+    });
     out.sort((a, b) => b.lastAt - a.lastAt);
     return out.map(({ lastAt: _lastAt, ...rest }) => rest);
   });
@@ -86,27 +92,34 @@ export async function listConversationsForUser(userId: string, role: string): Pr
 export async function listConversations(userId: string) {
   return withUser(userId, async (tx) => {
     const convos = await tx.select().from(conversations);
-    const out = [];
-    for (const c of convos) {
-      const otherId = c.participantA === userId ? c.participantB : c.participantA;
-      const [other] = await tx
-        .select({ id: users.id, fullName: users.fullName, email: users.email, role: users.role })
-        .from(users)
-        .where(eq(users.id, otherId))
-        .limit(1);
-      const [last] = await tx
-        .select()
-        .from(messages)
-        .where(eq(messages.conversationId, c.id))
-        .orderBy(desc(messages.sentAt))
-        .limit(1);
-      out.push({ conversation: c, other, last });
-    }
-    return out.sort((a, b) => {
-      const ta = a.last?.sentAt ? new Date(a.last.sentAt).getTime() : 0;
-      const tb = b.last?.sentAt ? new Date(b.last.sentAt).getTime() : 0;
-      return tb - ta;
-    });
+    if (convos.length === 0) return [];
+
+    // Same batching as listConversationsForUser: one query for participants, one
+    // DISTINCT ON for the latest message per conversation (was 2 per row).
+    const otherIds = [...new Set(convos.map((c) => (c.participantA === userId ? c.participantB : c.participantA)))];
+    const convoIds = convos.map((c) => c.id);
+    const userRows = await tx
+      .select({ id: users.id, fullName: users.fullName, email: users.email, role: users.role })
+      .from(users)
+      .where(inArray(users.id, otherIds));
+    const lastRows = await tx
+      .selectDistinctOn([messages.conversationId])
+      .from(messages)
+      .where(inArray(messages.conversationId, convoIds))
+      .orderBy(messages.conversationId, desc(messages.sentAt));
+    const userById = new Map(userRows.map((u) => [u.id, u] as const));
+    const lastByConvo = new Map(lastRows.map((m) => [m.conversationId, m] as const));
+
+    return convos
+      .map((c) => {
+        const otherId = c.participantA === userId ? c.participantB : c.participantA;
+        return { conversation: c, other: userById.get(otherId), last: lastByConvo.get(c.id) ?? undefined };
+      })
+      .sort((a, b) => {
+        const ta = a.last?.sentAt ? new Date(a.last.sentAt).getTime() : 0;
+        const tb = b.last?.sentAt ? new Date(b.last.sentAt).getTime() : 0;
+        return tb - ta;
+      });
   });
 }
 
