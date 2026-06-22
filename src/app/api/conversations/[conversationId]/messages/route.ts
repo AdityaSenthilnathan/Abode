@@ -11,6 +11,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ convers
   const thread = await getThread(user.id, conversationId);
   if (!thread) return NextResponse.json({ messages: [] }, { status: 404 });
   return NextResponse.json({
-    messages: thread.messages.map((m) => ({ id: m.id, body: m.body, senderId: m.senderId })),
+    messages: thread.messages.map((m) => ({
+      id: m.id,
+      body: m.body,
+      senderId: m.senderId,
+      deliveredAt: m.deliveredAt ? new Date(m.deliveredAt).toISOString() : null,
+      readAt: m.readAt ? new Date(m.readAt).toISOString() : null,
+    })),
   });
 }

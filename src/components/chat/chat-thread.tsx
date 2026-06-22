@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, SendHorizontal } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, SendHorizontal } from "lucide-react";
 import { sendMessageAction } from "@/actions/messaging";
 import type { ConversationJob } from "@/server/services/messaging";
 import { JobActionBar } from "./job-action-bar";
@@ -11,6 +11,22 @@ export interface ChatMessage {
   id: string;
   body: string;
   senderId: string;
+  deliveredAt: string | null;
+  readAt: string | null;
+}
+
+/** Read/delivered receipt shown under the last message you sent. */
+function Receipt({ msg }: { msg: ChatMessage }) {
+  const read = !!msg.readAt;
+  const delivered = !!msg.deliveredAt;
+  const label = read ? "Read" : delivered ? "Delivered" : "Sent";
+  const Icon = read || delivered ? CheckCheck : Check;
+  return (
+    <div className={`mt-1 flex items-center gap-1 text-[11px] ${read ? "text-brand" : "text-muted"}`}>
+      <Icon className="h-3 w-3" />
+      {label}
+    </div>
+  );
 }
 
 export function ChatThread({
@@ -72,6 +88,9 @@ export function ChatThread({
     router.refresh();
   }
 
+  // Receipt shows only under your most recent sent message (iMessage-style).
+  const lastMineIndex = msgs.reduce((acc, m, i) => (m.senderId === meId ? i : acc), -1);
+
   return (
     <div className="flex h-[70vh] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
       <div className="flex items-center gap-2 border-b border-line bg-surface-2/50 px-3 py-3">
@@ -88,19 +107,22 @@ export function ChatThread({
       {job && <JobActionBar job={job} role={role} conversationId={conversationId} />}
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {msgs.length === 0 && <p className="text-sm text-muted">No messages yet. Say hello.</p>}
-        {msgs.map((m) => (
-          <div
-            key={m.id}
-            className={
-              "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm " +
-              (m.senderId === meId
-                ? "ml-auto rounded-br-md bg-brand text-brand-foreground"
-                : "mr-auto rounded-bl-md bg-surface-2")
-            }
-          >
-            {m.body}
-          </div>
-        ))}
+        {msgs.map((m, i) => {
+          const mine = m.senderId === meId;
+          return (
+            <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+              <div
+                className={
+                  "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm " +
+                  (mine ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface-2")
+                }
+              >
+                {m.body}
+              </div>
+              {mine && i === lastMineIndex && <Receipt msg={m} />}
+            </div>
+          );
+        })}
         <div ref={endRef} />
       </div>
       <form onSubmit={onSubmit} className="flex gap-2 border-t border-line p-3">
