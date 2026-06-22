@@ -12,13 +12,139 @@ import {
   users,
 } from "@db/schema";
 
-/** Tasks assigned to this handyman, with property name. */
+export type Urgency = "low" | "med" | "high" | "urgent";
+const URGENCY_RANK: Record<Urgency, number> = { low: 1, med: 2, high: 3, urgent: 4 };
+
+export interface EmployeeMapProperty {
+  id: string;
+  name: string;
+  address: string | null;
+  lat: number;
+  lng: number;
+  urgency: Urgency | null;
+  /** Unit the active request was reported on, e.g. "101". */
+  unit: string | null;
+  /** Id of this handyman's task here (for linking to the job page). */
+  taskId: string | null;
+  /** Owner's task title (the job), if one is assigned to this handyman here. */
+  task: string | null;
+  ownerName: string | null;
+  /** The manager's note on the task. */
+  ownerNote: string | null;
+  tenantName: string | null;
+  /** What the tenant reported. */
+  tenantNote: string | null;
+}
+
+/**
+ * Properties for the handyman map, enriched with the single most relevant
+ * active maintenance request (highest urgency, then newest) and this
+ * handyman's task at each property — so a pin's popup can show the job, the
+ * urgency, and a personal note from the tenant or the manager.
+ */
+export function mapProperties(handymanId: string): Promise<EmployeeMapProperty[]> {
+  return withUser(handymanId, async (tx) => {
+    const props = await tx
+      .select({
+        id: properties.id,
+        name: properties.name,
+        address: properties.address,
+        lat: properties.lat,
+        lng: properties.lng,
+        ownerName: users.fullName,
+        ownerEmail: users.email,
+      })
+      .from(properties)
+      .leftJoin(users, eq(users.id, properties.ownerId));
+
+    const reqs = await tx
+      .select({
+        propertyId: units.propertyId,
+        unitNumber: units.unitNumber,
+        urgency: maintenanceRequests.urgency,
+        status: maintenanceRequests.status,
+        description: maintenanceRequests.description,
+        createdAt: maintenanceRequests.createdAt,
+        tenantName: users.fullName,
+        tenantEmail: users.email,
+      })
+      .from(maintenanceRequests)
+      .innerJoin(units, eq(units.id, maintenanceRequests.unitId))
+      .leftJoin(users, eq(users.id, units.tenantId));
+
+    const tks = await tx
+      .select({
+        id: tasks.id,
+        propertyId: tasks.propertyId,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        createdAt: tasks.createdAt,
+      })
+      .from(tasks)
+      .where(eq(tasks.assignedTo, handymanId));
+
+    // Best active request per property: highest urgency, then most recent.
+    const reqByProp = new Map<string, (typeof reqs)[number]>();
+    for (const r of reqs) {
+      if (r.status === "done") continue;
+      const cur = reqByProp.get(r.propertyId);
+      const better =
+        !cur ||
+        URGENCY_RANK[r.urgency] > URGENCY_RANK[cur.urgency] ||
+        (URGENCY_RANK[r.urgency] === URGENCY_RANK[cur.urgency] && r.createdAt > cur.createdAt);
+      if (better) reqByProp.set(r.propertyId, r);
+    }
+
+    // Best task per property: prefer active (not done), then most recent.
+    const taskByProp = new Map<string, (typeof tks)[number]>();
+    for (const t of tks) {
+      const cur = taskByProp.get(t.propertyId);
+      const tActive = t.status !== "done";
+      const curActive = cur ? cur.status !== "done" : false;
+      const better = !cur || (tActive && !curActive) || (tActive === curActive && t.createdAt > cur.createdAt);
+      if (better) taskByProp.set(t.propertyId, t);
+    }
+
+    return props
+      .filter((p) => p.lat != null && p.lng != null)
+      .map((p) => {
+        const r = reqByProp.get(p.id);
+        const t = taskByProp.get(p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          address: p.address,
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+          urgency: r?.urgency ?? null,
+          unit: r?.unitNumber ?? null,
+          taskId: t?.id ?? null,
+          task: t?.title ?? null,
+          ownerName: p.ownerName ?? p.ownerEmail ?? null,
+          ownerNote: t?.description ?? null,
+          tenantName: r?.tenantName ?? r?.tenantEmail ?? null,
+          tenantNote: r?.description ?? null,
+        };
+      });
+  });
+}
+
+/** Tasks assigned to this handyman, with property name, coords, and request urgency. */
 export function listJobs(handymanId: string) {
   return withUser(handymanId, (tx) =>
     tx
-      .select({ task: tasks, propertyName: properties.name, propertyAddress: properties.address })
+      .select({
+        task: tasks,
+        propertyName: properties.name,
+        propertyAddress: properties.address,
+        lat: properties.lat,
+        lng: properties.lng,
+        urgency: maintenanceRequests.urgency,
+      })
       .from(tasks)
       .innerJoin(properties, eq(properties.id, tasks.propertyId))
+      .leftJoin(maintenanceRequests, eq(maintenanceRequests.id, tasks.requestId))
       .where(eq(tasks.assignedTo, handymanId))
       .orderBy(desc(tasks.createdAt)),
   );

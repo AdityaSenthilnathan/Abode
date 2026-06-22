@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { assertRole } from "@/server/auth/guard";
 import {
   acceptJob,
@@ -8,25 +9,41 @@ import {
   submitCompletion,
   submitEstimate,
 } from "@/server/services/handyman";
+import { ensureJobConversations, messageManagerForTask } from "@/server/services/messaging";
+
+export async function openJobChatAction(formData: FormData) {
+  const u = await assertRole("employee");
+  const taskId = String(formData.get("taskId"));
+  await ensureJobConversations(u.id, taskId);
+  redirect(`/messages?job=${taskId}`);
+}
 
 export async function acceptJobAction(formData: FormData) {
   const u = await assertRole("employee");
-  await acceptJob(u.id, String(formData.get("taskId")));
+  const taskId = String(formData.get("taskId"));
+  await acceptJob(u.id, taskId);
   revalidatePath("/jobs");
+  revalidatePath(`/jobs/${taskId}`);
 }
 
 export async function declineJobAction(formData: FormData) {
   const u = await assertRole("employee");
-  await declineJob(u.id, String(formData.get("taskId")));
+  const taskId = String(formData.get("taskId"));
+  await declineJob(u.id, taskId);
   revalidatePath("/jobs");
+  // The job is no longer assigned to this handyman, so its detail page 404s —
+  // send them back to the list whether they declined from the list or the detail.
+  redirect("/jobs");
 }
 
 export async function submitEstimateAction(formData: FormData) {
   const u = await assertRole("employee");
   const taskId = String(formData.get("taskId"));
   const dollars = Number(formData.get("amount"));
+  const message = String(formData.get("message") ?? "").trim();
   if (Number.isFinite(dollars) && dollars > 0) {
     await submitEstimate(u.id, taskId, Math.round(dollars * 100));
+    if (message) await messageManagerForTask(u.id, taskId, message);
   }
   revalidatePath(`/jobs/${taskId}`);
 }

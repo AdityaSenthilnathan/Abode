@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/components/page-skeleton";
+import { MessagesSkeleton } from "@/components/skeletons";
 
 export default function Loading() {
-  return <PageSkeleton />;
+  return <MessagesSkeleton />;
 }

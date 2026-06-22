@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Bind Tailwind's `dark:` variant to the same logic as our CSS-variable theme:
+   forced dark via [data-theme="dark"], or system dark unless forced light. This
+   keeps `dark:` utilities in sync with the header theme toggle. */
+@custom-variant dark {
+  :where([data-theme="dark"]) & {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    :where(html:not([data-theme="light"])) & {
+      @slot;
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ tokens */
 /* The Abode design system. Role experiences (tenant/owner/maintenance) all
    pull from these, so restyling here cascades everywhere. Use the semantic
@@ -17,8 +31,10 @@
   --radius: 1rem;
 }
 
+/* Dark palette. Shared by the system-preference fallback and the manual
+   `data-theme="dark"` override set by the header theme toggle. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0a0b0e;
     --surface: #14161c;
     --surface-2: #1b1e26;
@@ -29,6 +45,18 @@
     --brand-foreground: #ffffff;
     --ring: #818cf8;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0a0b0e;
+  --surface: #14161c;
+  --surface-2: #1b1e26;
+  --line: #272b35;
+  --foreground: #e9ebef;
+  --muted: #98a1b0;
+  --brand: #6366f1;
+  --brand-foreground: #ffffff;
+  --ring: #818cf8;
 }
 
 @theme inline {
@@ -66,8 +94,12 @@ body::before {
   background: radial-gradient(60rem 28rem at 50% -8rem, color-mix(in oklab, var(--brand) 14%, transparent), transparent 70%);
 }
 
-* {
-  border-color: var(--line);
+/* Default border color, in @layer base so explicit `border-*` utilities (e.g.
+   border-slate-100 on the map popup) win over it instead of being overridden. */
+@layer base {
+  * {
+    border-color: var(--line);
+  }
 }
 
 :focus-visible {

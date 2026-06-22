@@ -4,6 +4,7 @@ import { House, LogOut } from "lucide-react";
 import type { SessionUser } from "@/server/auth/session";
 import { NavLinks } from "./nav-links";
 import { NotificationBell } from "./notification-bell";
+import { ThemeToggle } from "./theme-toggle";
 
 export interface NavItem {
   href: string;
@@ -41,6 +42,7 @@ export function AppShell({
           <NavLinks items={nav} />
 
           <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             <NotificationBell />
             <div className="flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-1 sm:pr-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
