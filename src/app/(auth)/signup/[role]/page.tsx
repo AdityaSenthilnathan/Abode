@@ -14,12 +14,14 @@ export default async function SignupRolePage({ params }: { params: Promise<{ rol
   if (!VALID.includes(role as Role)) notFound();
   const r = role as Role;
   return (
-    <div className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-6 px-6 py-24">
-      <div className="space-y-1 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Create your {TITLE[r]} account</h1>
-        <p className="text-sm opacity-60">Takes a minute.</p>
+    <div className="animate-fade-up w-full max-w-md">
+      <div className="glass-strong rounded-3xl p-8 shadow-2xl shadow-brand/10 sm:p-10">
+        <div className="mb-6 space-y-1 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Create your {TITLE[r]} account</h1>
+          <p className="text-sm text-muted">Takes a minute.</p>
+        </div>
+        <SignupForm role={r} />
       </div>
-      <SignupForm role={r} />
     </div>
   );
 }

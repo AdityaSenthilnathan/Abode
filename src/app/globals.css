@@ -19,15 +19,21 @@
    pull from these, so restyling here cascades everywhere. Use the semantic
    utilities: bg-background, bg-surface, border-line, text-muted, bg-brand … */
 :root {
-  --background: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #eef1f5;
-  --line: #e4e7ec;
-  --foreground: #0f1626;
-  --muted: #5b6472;
-  --brand: #4f46e5;
-  --brand-foreground: #ffffff;
-  --ring: #6366f1;
+  /* Warm, sunlit "home" palette — cream paper, terracotta, honey-gold, sage.
+     Reads like golden-hour light through a window, not a cool tech product. */
+  --background: #f8f2e9;
+  --surface: #fffdf9;
+  --surface-2: #f1e7d8;
+  --line: #e8dcc9;
+  --foreground: #2a221c;
+  --muted: #7c6f60;
+  --brand: #c0613a;
+  --brand-foreground: #fff8f0;
+  --ring: #c0613a;
+  /* Warm lighting accents — used for landing/auth glows, gradients, text. */
+  --accent: #d99748;
+  --accent-2: #8a9a72;
+  --accent-3: #ecc18c;
   --radius: 1rem;
 }
 
@@ -35,28 +41,35 @@
    `data-theme="dark"` override set by the header theme toggle. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #0a0b0e;
-    --surface: #14161c;
-    --surface-2: #1b1e26;
-    --line: #272b35;
-    --foreground: #e9ebef;
-    --muted: #98a1b0;
-    --brand: #6366f1;
-    --brand-foreground: #ffffff;
-    --ring: #818cf8;
+    /* Cozy lamplight — warm espresso room lit by a terracotta glow. */
+    --background: #161009;
+    --surface: #211a12;
+    --surface-2: #2b2117;
+    --line: #3a2e20;
+    --foreground: #f3e8d8;
+    --muted: #b2a18d;
+    --brand: #e2895a;
+    --brand-foreground: #1c1208;
+    --ring: #e2895a;
+    --accent: #e8b569;
+    --accent-2: #a6b487;
+    --accent-3: #f0c79b;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #0a0b0e;
-  --surface: #14161c;
-  --surface-2: #1b1e26;
-  --line: #272b35;
-  --foreground: #e9ebef;
-  --muted: #98a1b0;
-  --brand: #6366f1;
-  --brand-foreground: #ffffff;
-  --ring: #818cf8;
+  --background: #161009;
+  --surface: #211a12;
+  --surface-2: #2b2117;
+  --line: #3a2e20;
+  --foreground: #f3e8d8;
+  --muted: #b2a18d;
+  --brand: #e2895a;
+  --brand-foreground: #1c1208;
+  --ring: #e2895a;
+  --accent: #e8b569;
+  --accent-2: #a6b487;
+  --accent-3: #f0c79b;
 }
 
 @theme inline {
@@ -68,6 +81,9 @@
   --color-muted: var(--muted);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
   --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -109,4 +125,124 @@ body::before {
 
 ::selection {
   background: color-mix(in oklab, var(--brand) 28%, transparent);
+}
+
+/* ============================================================ marketing chrome
+   Decorative system shared by the landing + auth pages: an animated aurora
+   backdrop, a faint blueprint grid, film grain, glass surfaces, gradient
+   text, and entrance/idle motion. All pure CSS so server components can use
+   it with zero client JS. Motion respects prefers-reduced-motion (bottom). */
+
+/* --- aurora backdrop ---------------------------------------------------- */
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: 0.55;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .aurora-blob { opacity: 0.4; filter: blur(88px); }
+}
+:root[data-theme="dark"] .aurora-blob { opacity: 0.4; filter: blur(88px); }
+
+/* Warm "lighting" — a soft golden wash from above (sun through a window),
+   a honey glow at one shoulder, and a terracotta hearth low on the page. */
+.aurora-1 {
+  width: 52rem; height: 40rem; top: -20rem; left: 6%;
+  background: radial-gradient(circle at 50% 40%, var(--accent-3), transparent 66%);
+  animation: drift-1 30s ease-in-out infinite alternate;
+}
+.aurora-2 {
+  width: 38rem; height: 38rem; top: -12rem; right: -12rem;
+  background: radial-gradient(circle at 50% 50%, var(--accent), transparent 66%);
+  animation: drift-2 34s ease-in-out infinite alternate;
+}
+.aurora-3 {
+  width: 40rem; height: 40rem; bottom: -20rem; left: 22%;
+  background: radial-gradient(circle at 50% 50%, var(--brand), transparent 68%);
+  animation: drift-3 38s ease-in-out infinite alternate;
+}
+@keyframes drift-1 { to { transform: translate3d(6rem, 4rem, 0) scale(1.12); } }
+@keyframes drift-2 { to { transform: translate3d(-5rem, 5rem, 0) scale(1.08); } }
+@keyframes drift-3 { to { transform: translate3d(4rem, -4rem, 0) scale(1.15); } }
+
+/* --- blueprint grid ----------------------------------------------------- */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 62% at 50% 0%, #000 28%, transparent 76%);
+  mask-image: radial-gradient(ellipse 75% 62% at 50% 0%, #000 28%, transparent 76%);
+}
+
+/* --- film grain --------------------------------------------------------- */
+.bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* --- glass surfaces ----------------------------------------------------- */
+.glass {
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+.glass-strong {
+  background: color-mix(in oklab, var(--surface) 86%, transparent);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+/* --- gradient text ------------------------------------------------------ */
+.text-gradient {
+  background-image: linear-gradient(
+    105deg,
+    var(--brand) 8%,
+    color-mix(in oklab, var(--accent) 78%, var(--brand)) 48%,
+    color-mix(in oklab, var(--accent-3) 70%, var(--accent)) 92%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- CTA sheen ---------------------------------------------------------- */
+.btn-sheen { position: relative; overflow: hidden; }
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 55%, transparent), transparent);
+}
+.btn-sheen:hover::after { animation: sheen 0.9s ease; }
+@keyframes sheen { to { transform: translateX(130%) skewX(-18deg); } }
+
+/* --- entrance + idle motion -------------------------------------------- */
+@keyframes fade-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes pulse-soft { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.animate-fade-up { animation: fade-up 0.8s cubic-bezier(0.16, 0.84, 0.44, 1) both; }
+.animate-fade-in { animation: fade-in 1s ease both; }
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+/* Lift cards on hover with a soft brand-tinted shadow. */
+.card-lift { transition: transform 0.35s cubic-bezier(0.16, 0.84, 0.44, 1), box-shadow 0.35s ease, border-color 0.35s ease; }
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px -22px color-mix(in oklab, var(--brand) 55%, transparent);
+  border-color: color-mix(in oklab, var(--brand) 40%, var(--line));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob, .text-gradient,
+  .animate-fade-up, .animate-fade-in, .animate-float, .animate-pulse-soft {
+    animation: none !important;
+  }
+  .animate-fade-up { opacity: 1; transform: none; }
+  .btn-sheen:hover::after { animation: none; }
 }
