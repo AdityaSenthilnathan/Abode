@@ -31,13 +31,11 @@ export function JobsSkeleton() {
       <div className="space-y-3">
         {/* location banner */}
         <Bar className="h-9 w-full rounded-lg bg-foreground/[0.04]" />
-        {/* status filter + sort bar */}
-        <div className="flex items-center justify-between gap-2">
-          <Bar className="h-9 w-72 rounded-xl bg-foreground/[0.06]" />
-          <div className="flex items-center gap-2">
-            <Bar className="h-[30px] w-28 rounded-lg bg-foreground/[0.06]" />
-            <Bar className="h-[30px] w-[30px] rounded-lg bg-foreground/[0.06]" />
-          </div>
+        {/* sort bar */}
+        <div className="flex items-center gap-2">
+          <Bar className="h-4 w-12 bg-foreground/[0.06]" />
+          <Bar className="h-[30px] w-28 rounded-lg bg-foreground/[0.06]" />
+          <Bar className="h-[30px] w-[30px] rounded-lg bg-foreground/[0.06]" />
         </div>
         {/* cards */}
         {Array.from({ length: 2 }).map((_, i) => (

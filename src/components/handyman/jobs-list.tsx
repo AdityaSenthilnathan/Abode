@@ -154,25 +154,11 @@ export function JobsList({ jobs }: { jobs: JobCard[] }) {
         </div>
       )}
 
-      {/* status filter + sort controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-line bg-surface p-1">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setStatusFilter(s.key)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                statusFilter === s.key ? "bg-brand text-brand-foreground shadow-sm" : "text-muted hover:text-foreground"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted">Sort by</span>
-          <SortDropdown value={sortField} onChange={setSortField} />
+      {/* sort + view controls */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-muted">Sort by</span>
+        <SortDropdown value={sortField} onChange={setSortField} />
+        {!showDone && (
           <button
             type="button"
             onClick={() => setDir((d) => (d === "asc" ? "desc" : "asc"))}
@@ -182,12 +168,12 @@ export function JobsList({ jobs }: { jobs: JobCard[] }) {
           >
             {dir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
           </button>
-        </div>
+        )}
       </div>
 
       {shown.length === 0 && (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No {STATUS_FILTERS.find((s) => s.key === statusFilter)?.label.toLowerCase()} jobs right now.
+          No {showDone ? "completed" : "active"} jobs right now.
         </p>
       )}
 

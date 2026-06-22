@@ -106,8 +106,12 @@ export function mapProperties(handymanId: string): Promise<EmployeeMapProperty[]
       if (better) taskByProp.set(t.propertyId, t);
     }
 
+    // Only map properties where this handyman still has active (non-done) work —
+    // completed jobs shouldn't linger as pins.
+    const activePropIds = new Set(tks.filter((t) => t.status !== "done").map((t) => t.propertyId));
+
     return props
-      .filter((p) => p.lat != null && p.lng != null)
+      .filter((p) => p.lat != null && p.lng != null && activePropIds.has(p.id))
       .map((p) => {
         const r = reqByProp.get(p.id);
         const t = taskByProp.get(p.id);
