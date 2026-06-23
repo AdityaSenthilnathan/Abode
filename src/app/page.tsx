@@ -8,7 +8,7 @@ import {
   Heart,
   Sparkles,
   Receipt,
-  CircleDot,
+  Bell,
   TrendingUp,
   Check,
 } from "lucide-react";
@@ -22,74 +22,98 @@ const BENEFITS = [
   {
     icon: Wallet,
     t: "Get paid on time",
-    d: "Online rent & dues with automatic reminders and instant payouts. The money shows up — you stop chasing it.",
+    d: "Rent & dues online, with reminders that chase for you.",
     accent: "from-brand/25 to-brand/5 text-brand",
   },
   {
     icon: Wrench,
     t: "Maintenance, handled",
-    d: "A tenant's photo becomes a dispatched job — estimate, approval, receipt — without the midnight phone calls.",
+    d: "A tenant photo becomes a dispatched job — estimate to receipt.",
     accent: "from-accent-2/30 to-accent-2/5 text-accent-2",
   },
   {
     icon: LineChart,
-    t: "See everything at once",
-    d: "Revenue, occupancy, and every unit on one dashboard. Always know exactly how your portfolio is doing.",
+    t: "See it all at once",
+    d: "Revenue, occupancy, and every unit on one live dashboard.",
     accent: "from-accent/30 to-accent/5 text-accent",
   },
   {
     icon: Heart,
     t: "Tenants who renew",
-    d: "A portal residents actually like means fewer complaints, longer stays, and far less turnover for you.",
+    d: "A portal residents love — so they stay longer, churn less.",
     accent: "from-brand/25 to-brand/5 text-brand",
   },
 ] as const;
 
 /** The owner's dashboard, previewed — proof, not a promise. */
-function PreviewCard() {
-  const bars = [38, 56, 44, 72, 60, 88, 76];
+function ActivityRow({
+  icon: Icon,
+  tone,
+  label,
+  status,
+}: {
+  icon: typeof Receipt;
+  tone: string;
+  label: string;
+  status: string;
+}) {
   return (
-    <div className="glass animate-float w-full max-w-sm rounded-3xl p-5 shadow-2xl shadow-brand/10">
-      <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-4">
+      <span className="flex min-w-0 items-center gap-3 text-sm font-medium">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="truncate">{label}</span>
+      </span>
+      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${tone}`}>{status}</span>
+    </div>
+  );
+}
+
+function PreviewCard() {
+  const bars = [40, 58, 46, 72, 62, 90, 80];
+  return (
+    <div className="glass animate-float w-full max-w-md rounded-[1.75rem] p-7 shadow-2xl shadow-brand/10">
+      {/* header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-semibold">Maple Court</div>
-          <div className="text-xs text-muted">12 units · West Loop</div>
+          <div className="text-lg font-semibold">Maple Court</div>
+          <div className="mt-1 text-sm text-muted">12 units · West Loop</div>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-accent-2/15 px-2.5 py-1 text-xs font-medium text-accent-2">
-          <CircleDot className="h-3 w-3" /> 94% occupied
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand/10 px-3 py-1.5 text-xs font-medium text-brand">
+          <Bell className="h-3.5 w-3.5" /> 4 new
         </span>
       </div>
 
-      <div className="mt-5 flex items-center gap-1.5 text-xs text-muted">
-        <TrendingUp className="h-3.5 w-3.5 text-brand" /> Collected this month
-      </div>
-      <div className="mt-2 flex h-24 items-end gap-2">
-        {bars.map((h, i) => (
-          <div
-            key={i}
-            className="flex-1 rounded-t-md bg-gradient-to-t from-brand/30 to-brand animate-fade-up"
-            style={{ height: `${h}%`, animationDelay: `${0.3 + i * 0.06}s` }}
-          />
-        ))}
+      {/* focal stat + trend chart */}
+      <div className="mt-8">
+        <div className="text-sm text-muted">Collected this month</div>
+        <div className="mt-1.5 flex items-baseline gap-2.5">
+          <span className="text-[2.25rem] font-semibold leading-none tracking-tight">$48,200</span>
+          <span className="inline-flex items-center gap-0.5 text-sm font-medium text-accent-2">
+            <TrendingUp className="h-4 w-4" /> +12%
+          </span>
+        </div>
+        <div className="mt-6 flex h-28 items-end gap-2.5">
+          {bars.map((h, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-md bg-gradient-to-t from-brand/20 to-brand animate-fade-up"
+              style={{ height: `${h}%`, animationDelay: `${0.3 + i * 0.06}s` }}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="mt-4 space-y-2">
-        <div className="flex items-center justify-between rounded-xl border border-line bg-surface/60 px-3 py-2">
-          <span className="flex items-center gap-2 text-sm">
-            <Receipt className="h-4 w-4 text-muted" /> Unit 4B · Rent
-          </span>
-          <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-xs font-medium text-accent-2">
-            Paid
-          </span>
-        </div>
-        <div className="flex items-center justify-between rounded-xl border border-line bg-surface/60 px-3 py-2">
-          <span className="flex items-center gap-2 text-sm">
-            <Wrench className="h-4 w-4 text-muted" /> Leaky faucet
-          </span>
-          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-            In progress
-          </span>
-        </div>
+      {/* recent activity */}
+      <div className="mt-8 space-y-5 border-t border-line pt-6">
+        <ActivityRow icon={Receipt} tone="bg-accent-2/15 text-accent-2" label="Unit 4B · Rent" status="Paid" />
+        <ActivityRow
+          icon={Wrench}
+          tone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
+          label="Leaky faucet"
+          status="In progress"
+        />
       </div>
     </div>
   );
@@ -122,7 +146,7 @@ export default async function Home() {
         <div className="text-center lg:text-left">
           <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs font-medium text-muted backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-brand" />
-            Built for property owners &amp; managers
+            For property owners &amp; managers
           </span>
 
           <h1
@@ -137,9 +161,8 @@ export default async function Home() {
             className="animate-fade-up mx-auto mt-5 max-w-md text-pretty text-lg text-muted lg:mx-0"
             style={{ animationDelay: "0.16s" }}
           >
-            Abode is the calm command center for property owners — collect rent,
-            dispatch maintenance, and keep tenants happy from one place. Less
-            chasing, more growing.
+            Collect rent, dispatch maintenance, and keep tenants happy — all from
+            one calm place.
           </p>
 
           <div
@@ -187,9 +210,9 @@ export default async function Home() {
           <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
             Run more doors with less of your day
           </h2>
-          <p className="mx-auto mt-2 max-w-xl text-pretty text-muted">
-            Your tenants and your maintenance crew each get their own app. You get
-            the quiet, organized control room they all feed into.
+          <p className="mx-auto mt-2 max-w-md text-pretty text-muted">
+            Tenants and crew each get their own app. You get the control room they
+            feed into.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -221,9 +244,8 @@ export default async function Home() {
           <h2 className="relative text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
             Get your weekends back.
           </h2>
-          <p className="relative mx-auto mt-3 max-w-md text-pretty text-muted">
-            Set up your first property in minutes, invite your tenants and crew with
-            a code, and let Abode handle the busywork.
+          <p className="relative mx-auto mt-3 max-w-sm text-pretty text-muted">
+            Set up your first property in minutes. Abode handles the busywork.
           </p>
           <div className="relative mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
