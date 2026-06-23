@@ -1,4 +1,11 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+
+/* Which backdrop the landing + auth pages use. Finished variants:
+   "apartments" — a front-facing row of apartments; windows light up in dark mode.
+   "photo"      — a real apartment-building photograph (theme-aware light/dark).
+   "skyline"    — the procedural golden-hour skyline scene.
+   Flip this one value to switch both pages. */
+const VARIANT: "apartments" | "photo" | "skyline" = "photo";
 
 /* Deterministic hash → [0,1). Integer-only (Math.imul), so the server and the
    client generate the byte-identical skyline — no hydration mismatch. */
@@ -107,12 +114,11 @@ const STARS = [
 ];
 
 /**
- * Shared decorative layer behind the landing + auth pages: warm aurora light,
- * a couple of drifting clouds, an apartment skyline at the bottom, and a
- * whisper of film grain. Pure markup (no client JS); all motion lives in
- * globals.css and respects prefers-reduced-motion.
+ * Procedural golden-hour scene: warm aurora light, drifting clouds, a sun/moon,
+ * stars at dusk, a distant flock, and an apartment skyline. Pure markup (no
+ * client JS); all motion lives in globals.css and respects reduced-motion.
  */
-export function Backdrop() {
+function SkylineBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-background" />
@@ -145,6 +151,154 @@ export function Backdrop() {
       <div className="absolute inset-0 bg-grain opacity-[0.16]" />
     </div>
   );
+}
+
+/**
+ * A front-facing row of apartment buildings. Each facade has floors of windows,
+ * a roof parapet, and a street-level entrance. A deterministic subset of windows
+ * is "occupied" — in light mode they read as daytime glass; in dark mode they
+ * flick on in a staggered wave (and a few keep gently breathing). Deterministic
+ * (integer hash) so SSR/CSR match.
+ */
+function ApartmentRow() {
+  const W = 1600;
+  const H = 340;
+  const items: ReactNode[] = [];
+  const lit = (delay: number): CSSProperties => ({ ["--d"]: `${delay.toFixed(2)}s` } as CSSProperties);
+
+  let x = -8;
+  for (let bi = 0; x < W + 8 && bi < 40; bi++) {
+    const w = 132 + Math.floor(rand(bi * 131 + 7) * 84); // 132–215
+    const floors = 3 + Math.floor(rand(bi * 271 + 11) * 3); // 3–5
+    const floorH = 42;
+    const groundH = 50;
+    const roofH = 12;
+    const bodyH = groundH + floors * floorH;
+    const by = H - bodyH;
+    const parts: ReactNode[] = [];
+
+    // facade + roof parapet
+    parts.push(<rect key="body" x={x} y={by} width={w} height={bodyH} className={`apt-f${(bi % 3) + 1}`} />);
+    parts.push(<rect key="roof" x={x - 3} y={by - roofH} width={w + 6} height={roofH + 4} rx={2.5} className="apt-roof" />);
+
+    // upper-floor windows
+    const cols = Math.max(2, Math.min(4, Math.round((w - 24) / 54)));
+    const winW = 26;
+    const winH = 26;
+    const gap = (w - cols * winW) / (cols + 1);
+    for (let f = 0; f < floors; f++) {
+      const wy = by + 13 + f * floorH;
+      for (let c = 0; c < cols; c++) {
+        const seed = bi * 1009 + f * 37 + c * 7;
+        const on = rand(seed) > 0.42;
+        const flick = on && rand(seed * 7 + 1) > 0.82;
+        const delay = 0.1 + bi * 0.05 + rand(seed * 5) * 0.28;
+        parts.push(
+          <rect
+            key={`w${f}-${c}`}
+            x={x + gap * (c + 1) + winW * c}
+            y={wy}
+            width={winW}
+            height={winH}
+            rx={3}
+            className={on ? `apt-win-on${flick ? " apt-flick" : ""}` : "apt-win"}
+            style={on ? lit(delay) : undefined}
+          />,
+        );
+      }
+    }
+
+    // street level: entrance + lit transom + two flanking windows
+    const doorW = 24;
+    const doorH = 42;
+    const doorX = x + w / 2 - doorW / 2;
+    parts.push(<rect key="door" x={doorX} y={H - doorH} width={doorW} height={doorH} rx={3} className="apt-door" />);
+    parts.push(
+      <rect key="transom" x={doorX} y={H - doorH - 11} width={doorW} height={7} rx={2} className="apt-win-on" style={lit(0.1 + bi * 0.05)} />,
+    );
+    const gwW = 22;
+    [x + w * 0.16, x + w * 0.84 - gwW].forEach((gx, k) => {
+      const on = rand(bi * 733 + k * 13) > 0.4;
+      parts.push(
+        <rect
+          key={`g${k}`}
+          x={gx}
+          y={H - 36}
+          width={gwW}
+          height={26}
+          rx={3}
+          className={on ? "apt-win-on" : "apt-win"}
+          style={on ? lit(0.15 + bi * 0.05) : undefined}
+        />,
+      );
+    });
+
+    items.push(<g key={bi}>{parts}</g>);
+    x += w + 6;
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMax slice"
+      className="apt-row absolute inset-x-0 bottom-0 h-[15rem] w-full sm:h-[18rem]"
+    >
+      {items}
+    </svg>
+  );
+}
+
+/**
+ * "Row of apartments" scene: warm sky (sun/moon, clouds, stars at dusk) above a
+ * row of apartment buildings whose windows light up at night.
+ */
+function ApartmentsBackdrop() {
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div className="absolute inset-0 bg-background" />
+      <div className="aurora-blob aurora-1" />
+      <div className="aurora-blob aurora-2" />
+      <div className="aurora-blob aurora-3" />
+      <div className="celestial" />
+      <div className="stars">
+        {STARS.map((s, i) => (
+          <span
+            key={i}
+            className={`star ${s.tw ? "sky-twinkle" : ""}`}
+            style={{ top: s.top, left: s.left, animationDelay: `${(i * 0.7) % 4}s` }}
+          />
+        ))}
+      </div>
+      <div className="cloud cloud-1" />
+      <div className="cloud cloud-2" />
+      <div className="apt-glow" />
+      <ApartmentRow />
+      <div className="absolute inset-0 bg-grain opacity-[0.1]" />
+    </div>
+  );
+}
+
+/**
+ * Real apartment-building photograph behind the landing + auth pages. One bright
+ * photo, kept airy in light mode and dimmed into a warm dusk in dark mode via
+ * theme-aware scrims (see `.photo-*` in globals.css). Edges are scrimmed so the
+ * headline and hero copy stay legible over the image.
+ */
+function PhotoBackdrop() {
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div className="photo-bg" />
+      <div className="photo-scrim" />
+      <div className="bg-grain absolute inset-0 opacity-[0.08]" />
+    </div>
+  );
+}
+
+/** Shared backdrop for the landing + auth pages. Variant chosen by `VARIANT`. */
+export function Backdrop() {
+  if (VARIANT === "apartments") return <ApartmentsBackdrop />;
+  if (VARIANT === "photo") return <PhotoBackdrop />;
+  return <SkylineBackdrop />;
 }
 
 /** Abode wordmark: rounded brand tile + name. Size scales the whole lockup. */

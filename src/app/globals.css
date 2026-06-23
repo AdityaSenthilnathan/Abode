@@ -39,6 +39,14 @@
   --skyline-far: #e9dcc6;
   --win-on: #df9636;
   --win-off: #c8b189;
+  /* "Row of apartments" backdrop — daytime facades + glass windows. */
+  --apt-f1: #e7d2b0;
+  --apt-f2: #ddc09c;
+  --apt-f3: #efe0c6;
+  --apt-roof: #b76a44;
+  --apt-door: #9c5532;
+  --apt-win: #bcd0d8;
+  --apt-lit: #bcd0d8;
   --radius: 1rem;
 }
 
@@ -63,6 +71,13 @@
     --skyline-far: #2a1d10;
     --win-on: #f4b85f;
     --win-off: #34271a;
+    --apt-f1: #241a12;
+    --apt-f2: #2a1e13;
+    --apt-f3: #1c140d;
+    --apt-roof: #3d2719;
+    --apt-door: #2a1a0f;
+    --apt-win: #20170e;
+    --apt-lit: #ffce7e;
   }
 }
 
@@ -83,6 +98,13 @@
   --skyline-far: #2a1d10;
   --win-on: #f4b85f;
   --win-off: #34271a;
+  --apt-f1: #241a12;
+  --apt-f2: #2a1e13;
+  --apt-f3: #1c140d;
+  --apt-roof: #3d2719;
+  --apt-door: #2a1a0f;
+  --apt-win: #20170e;
+  --apt-lit: #ffce7e;
 }
 
 @theme inline {
@@ -271,6 +293,131 @@ body::before {
   to { transform: translateX(112vw) translateY(0); }
 }
 
+/* --- "row of apartments" variant --------------------------------------
+   Front-facing apartment facades. In light mode the windows are daytime glass;
+   in dark mode the lights flick on in a staggered wave and stay lit (with a
+   warm glow + a few that gently breathe). Window colors are driven by the
+   --apt-* tokens, which flip between day and dusk per theme. */
+.apt-f1 { fill: var(--apt-f1); }
+.apt-f2 { fill: var(--apt-f2); }
+.apt-f3 { fill: var(--apt-f3); }
+.apt-roof { fill: var(--apt-roof); }
+.apt-door { fill: var(--apt-door); }
+.apt-win, .apt-win-on { fill: var(--apt-win); }
+
+@keyframes apt-light-on {
+  0%, 28% { fill: var(--apt-win); }
+  40% { fill: var(--apt-lit); }
+  46% { fill: var(--apt-win); }
+  56%, 100% { fill: var(--apt-lit); }
+}
+@keyframes apt-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+
+/* dark = night: the lit windows turn on (staggered via inline --d). */
+.apt-glow { position: absolute; inset-inline: 0; bottom: 0; height: 15rem; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .apt-win-on {
+    fill: var(--apt-lit);
+    filter: drop-shadow(0 0 3px color-mix(in oklab, var(--apt-lit) 65%, transparent));
+    animation: apt-light-on 0.85s ease both;
+    animation-delay: var(--d, 0s);
+  }
+  :root:not([data-theme="light"]) .apt-flick {
+    animation: apt-light-on 0.85s ease both, apt-breathe 5s ease-in-out 1.7s infinite;
+  }
+  :root:not([data-theme="light"]) .apt-glow {
+    background: linear-gradient(to top, color-mix(in oklab, var(--apt-lit) 16%, transparent), transparent 72%);
+  }
+}
+:root[data-theme="dark"] .apt-win-on {
+  fill: var(--apt-lit);
+  filter: drop-shadow(0 0 3px color-mix(in oklab, var(--apt-lit) 65%, transparent));
+  animation: apt-light-on 0.85s ease both;
+  animation-delay: var(--d, 0s);
+}
+:root[data-theme="dark"] .apt-flick {
+  animation: apt-light-on 0.85s ease both, apt-breathe 5s ease-in-out 1.7s infinite;
+}
+:root[data-theme="dark"] .apt-glow {
+  background: linear-gradient(to top, color-mix(in oklab, var(--apt-lit) 16%, transparent), transparent 72%);
+}
+
+/* --- photo backdrop variant (real apartment photos, day/night) ---------
+   Two real photographs swapped by theme: a sunlit row of apartments by day
+   (light), and a real apartment block AT NIGHT WITH ITS WINDOWS LIT (dark) —
+   so the "lights are on" with an actual photo. Scrims keep text legible. */
+.photo-bg {
+  position: absolute;
+  inset: 0;
+  /* light = the AI daytime render of the same building; dark = the real night
+     photo (overridden below). Same dimensions + center framing, so toggling
+     theme keeps the building in the exact same position. */
+  background-image: url("/backdrop-day.jpg");
+  background-size: cover;
+  background-position: center;
+  filter: saturate(1.05);
+}
+.photo-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--background) 76%, transparent) 0%,
+      color-mix(in oklab, var(--background) 50%, transparent) 30%,
+      color-mix(in oklab, var(--background) 44%, transparent) 62%,
+      color-mix(in oklab, var(--background) 56%, transparent) 100%
+    ),
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--background) 60%, transparent) 0%,
+      transparent 60%
+    ),
+    radial-gradient(120% 70% at 50% 100%, color-mix(in oklab, var(--brand) 14%, transparent), transparent 60%);
+}
+/* dark = the night photo (already dark, windows glowing): keep it bright so the
+   lit windows show, scrim only enough for legibility. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .photo-bg {
+    background-image: url("/backdrop-night.jpg");
+    filter: saturate(1.06) brightness(0.95);
+  }
+  :root:not([data-theme="light"]) .photo-scrim {
+    background:
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--background) 80%, transparent) 0%,
+        color-mix(in oklab, var(--background) 52%, transparent) 34%,
+        color-mix(in oklab, var(--background) 42%, transparent) 70%,
+        color-mix(in oklab, var(--background) 60%, transparent) 100%
+      ),
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--background) 64%, transparent) 0%,
+        transparent 56%
+      );
+  }
+}
+:root[data-theme="dark"] .photo-bg {
+  background-image: url("/backdrop-night.jpg");
+  filter: saturate(1.06) brightness(0.95);
+}
+:root[data-theme="dark"] .photo-scrim {
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--background) 80%, transparent) 0%,
+      color-mix(in oklab, var(--background) 52%, transparent) 34%,
+      color-mix(in oklab, var(--background) 42%, transparent) 70%,
+      color-mix(in oklab, var(--background) 60%, transparent) 100%
+    ),
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--background) 64%, transparent) 0%,
+      transparent 56%
+    );
+}
+
 /* --- blueprint grid ----------------------------------------------------- */
 .bg-grid {
   background-image:
@@ -344,7 +491,7 @@ body::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aurora-blob, .text-gradient, .sky-twinkle, .cloud, .birds,
+  .aurora-blob, .text-gradient, .sky-twinkle, .cloud, .birds, .apt-win-on, .apt-flick,
   .animate-fade-up, .animate-fade-in, .animate-float, .animate-pulse-soft {
     animation: none !important;
   }
