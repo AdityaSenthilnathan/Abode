@@ -22,7 +22,7 @@ export const pool =
     // Fail fast instead of hanging forever when the DB is unreachable (e.g. a
     // rotated dev IP that's no longer in the Aurora security group). 15s leaves
     // room for a scale-to-zero cluster to resume on the first connection, while
-    // still letting devLoginAction's offline `dev:<role>` fallback kick in.
+    // still letting demoLoginAction's offline `dev:<role>` fallback kick in.
     connectionTimeoutMillis: 15000,
     // Aurora requires TLS. `PGSSL=disable` opts out for a plain local Postgres.
     ssl: process.env.PGSSL === "disable" ? false : { rejectUnauthorized: false },

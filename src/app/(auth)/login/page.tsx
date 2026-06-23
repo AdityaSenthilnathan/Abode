@@ -1,5 +1,6 @@
 import { Sparkles, Check } from "lucide-react";
 import { LoginForm } from "@/components/auth/login-form";
+import { demoLogin } from "@/server/config";
 
 const PERKS = [
   "Revenue, dues, and occupancy at a glance",
@@ -8,7 +9,7 @@ const PERKS = [
 ];
 
 export default function LoginPage() {
-  const showDev = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true";
+  const showDemo = demoLogin();
   return (
     <div className="animate-fade-up w-full max-w-4xl">
       <div className="glass-strong grid overflow-hidden rounded-3xl shadow-2xl shadow-brand/10 md:grid-cols-2">
@@ -50,7 +51,7 @@ export default function LoginPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Sign in to Abode</h1>
             <p className="mt-1 text-sm text-muted">Enter your details to continue.</p>
           </div>
-          <LoginForm showDev={showDev} />
+          <LoginForm showDemo={showDemo} />
         </div>
       </div>
     </div>

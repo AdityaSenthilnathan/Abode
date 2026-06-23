@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import type { AuthenticationResultType } from "@aws-sdk/client-cognito-identity-provider";
 import { db } from "@/server/db/client";
 import { users } from "@db/schema";
+import { demoLogin } from "@/server/config";
 import { verifyAccessToken } from "./verify";
 import { cognitoRefresh } from "./cognito";
 
@@ -92,9 +93,9 @@ function cacheSet(key: string, user: SessionUser) {
  * Resolve the current user. Primary path: verify the Cognito access-token
  * cookie and map its `sub` to the local users row.
  *
- * Dev fallback (only when ALLOW_DEV_LOGIN=true and not production): an
- * `abode_dev_user` cookie naming a seeded user id — lets us exercise role UIs
- * without creating real Cognito accounts.
+ * Demo fallback (when `demoLogin()` is on — i.e. ALLOW_DEMO_LOGIN in prod, or
+ * the dev bypass locally): an `abode_dev_user` cookie naming a seeded user id,
+ * which lets a visitor explore a role without a real Cognito account.
  *
  * Memoized per server request via React `cache()`: a layout and the page it
  * wraps both call this on every navigation, and without memoization that's
@@ -147,7 +148,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     }
   }
 
-  if (process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true") {
+  if (demoLogin()) {
     const devId = jar.get("abode_dev_user")?.value;
     if (devId) {
       try {

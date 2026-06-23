@@ -2,16 +2,16 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight, Building2, Wrench, KeyRound, AlertCircle } from "lucide-react";
-import { loginAction, devLoginAction } from "@/actions/auth";
+import { loginAction, demoLoginAction } from "@/actions/auth";
 import { TextField, PasswordField } from "./fields";
 
-const DEV_ROLES = [
+const DEMO_ROLES = [
   { role: "owner", label: "Owner", icon: Building2 },
   { role: "employee", label: "Handyman", icon: Wrench },
   { role: "tenant", label: "Tenant", icon: KeyRound },
 ] as const;
 
-export function LoginForm({ showDev }: { showDev: boolean }) {
+export function LoginForm({ showDemo }: { showDemo: boolean }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
   // Controlled so a failed sign-in keeps the email/password instead of clearing.
   const [email, setEmail] = useState("");
@@ -66,12 +66,12 @@ export function LoginForm({ showDev }: { showDev: boolean }) {
         </Link>
       </p>
 
-      {showDev && (
+      {showDemo && (
         <div className="rounded-xl border border-dashed border-line bg-surface/40 p-3">
-          <p className="mb-2 text-center text-xs text-muted">Dev quick-login · seeded users</p>
+          <p className="mb-2 text-center text-xs text-muted">Demo login · no signup needed</p>
           <div className="grid grid-cols-3 gap-2">
-            {DEV_ROLES.map(({ role, label, icon: Icon }) => (
-              <form key={role} action={devLoginAction}>
+            {DEMO_ROLES.map(({ role, label, icon: Icon }) => (
+              <form key={role} action={demoLoginAction}>
                 <input type="hidden" name="role" value={role} />
                 <button className="flex w-full flex-col items-center gap-1 rounded-lg border border-line bg-surface/60 px-2 py-2 text-xs font-medium text-muted transition hover:border-brand/50 hover:bg-surface-2 hover:text-foreground">
                   <Icon className="h-4 w-4" />

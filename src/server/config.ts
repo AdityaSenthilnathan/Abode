@@ -29,6 +29,24 @@ export function devBypass(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true";
 }
 
+/**
+ * Demo login. Lets a visitor sign in as a pre-seeded demo account
+ * (owner / handyman / tenant) with one click and no password, to explore the
+ * product — this powers the "Demo login" buttons on the sign-in page.
+ *
+ * Unlike `devBypass()`, this is allowed in PRODUCTION when ALLOW_DEMO_LOGIN is
+ * set, so it can be exposed on the live site. It stays on automatically wherever
+ * the dev bypass is on, so local dev keeps its buttons with no extra config.
+ *
+ * Crucially this only ever logs into existing seeded rows; it never bypasses
+ * Cognito for real sign-ups (that remains `devBypass()`, dev-only). Enabling it
+ * means everyone shares the same demo accounts — only seed data you're happy to
+ * expose publicly should live under them.
+ */
+export function demoLogin(): boolean {
+  return process.env.ALLOW_DEMO_LOGIN === "true" || devBypass();
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   appUrl: opt("APP_URL") ?? "http://localhost:3000",

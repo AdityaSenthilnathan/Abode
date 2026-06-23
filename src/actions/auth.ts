@@ -9,6 +9,7 @@ import { users } from "@db/schema";
 import { cognitoCreateUser, cognitoLogin } from "@/server/auth/cognito";
 import { setSessionCookies, clearSessionCookies } from "@/server/auth/session";
 import { roleHome } from "@/server/auth/guard";
+import { demoLogin } from "@/server/config";
 import {
   assertCodeValid,
   createUserRecord,
@@ -16,6 +17,20 @@ import {
   redeemTenantCode,
 } from "@/server/services/onboarding";
 import type { Role } from "@/server/auth/session";
+
+/**
+ * Cookie options for the seeded-user session cookie that demo/dev login sets.
+ * `secure` in production so the cookie only rides over HTTPS, matching the real
+ * Cognito token cookies in setSessionCookies().
+ */
+function demoCookieOpts() {
+  return {
+    httpOnly: true as const,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  };
+}
 
 export type AuthState = { error: string } | undefined;
 
@@ -47,7 +62,7 @@ function humanError(e: unknown): string {
  * Dev-only escape hatch: when ALLOW_DEV_LOGIN is on (and not production), skip
  * Cognito entirely. Real Cognito calls need AWS credentials, which the local
  * machine may not have — without this, signup dies with "Could not load
- * credentials from any providers." Mirrors devLoginAction / getCurrentUser.
+ * credentials from any providers." Mirrors demoLoginAction / getCurrentUser.
  */
 function devAuthBypass(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_LOGIN === "true";
@@ -67,12 +82,12 @@ async function createAccount(email: string, pw: string, fullName: string, role: 
 
 /**
  * Start a session for a freshly created user. Dev bypass sets the same
- * `abode_dev_user` cookie that devLoginAction/getCurrentUser use; the real path
+ * `abode_dev_user` cookie that demoLoginAction/getCurrentUser use; the real path
  * logs in via Cognito to obtain token cookies.
  */
 async function startSession(user: { id: string }, email: string, pw: string) {
   if (devAuthBypass()) {
-    (await cookies()).set("abode_dev_user", user.id, { httpOnly: true, sameSite: "lax", path: "/" });
+    (await cookies()).set("abode_dev_user", user.id, demoCookieOpts());
     return;
   }
   const auth = await cognitoLogin(email, pw);
@@ -103,7 +118,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
       return { error: "Dev DB unavailable — is Postgres running and seeded?" };
     }
     if (!row) return { error: "No account with that email yet — sign up first." };
-    (await cookies()).set("abode_dev_user", row.id, { httpOnly: true, sameSite: "lax", path: "/" });
+    (await cookies()).set("abode_dev_user", row.id, demoCookieOpts());
     redirect(roleHome(row.role));
   }
 
@@ -184,9 +199,14 @@ export async function signupTenantAction(_prev: AuthState, formData: FormData): 
   redirect("/home");
 }
 
-/** DEV ONLY: quick-login as a seeded user of the chosen role. */
-export async function devLoginAction(formData: FormData): Promise<void> {
-  if (process.env.NODE_ENV === "production" || process.env.ALLOW_DEV_LOGIN !== "true") return;
+/**
+ * Demo quick-login as a seeded user of the chosen role. Allowed in production
+ * when ALLOW_DEMO_LOGIN is set (see `demoLogin()`), so the live site can offer a
+ * one-click "try it" experience. Logs into an existing seeded row only — never
+ * creates an account or touches Cognito.
+ */
+export async function demoLoginAction(formData: FormData): Promise<void> {
+  if (!demoLogin()) return;
   const role = String(formData.get("role")) as Role;
   // Prefer a real seeded user so DB-backed pages work as normal. If the DB is
   // unreachable (e.g. Aurora paused/IP-locked), fall back to a `dev:<role>`
@@ -198,6 +218,6 @@ export async function devLoginAction(formData: FormData): Promise<void> {
   } catch {
     // DB down — keep the synthetic sentinel.
   }
-  (await cookies()).set("abode_dev_user", cookieValue, { httpOnly: true, sameSite: "lax", path: "/" });
+  (await cookies()).set("abode_dev_user", cookieValue, demoCookieOpts());
   redirect(roleHome(role));
 }

@@ -41,3 +41,6 @@ infra/abode.env
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local production preview build (scripts/preview.sh)
+/.next-prod/
