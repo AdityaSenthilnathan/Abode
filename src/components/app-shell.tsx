@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { House, LogOut } from "lucide-react";
 import type { SessionUser } from "@/server/auth/session";
+import { logoutAction } from "@/actions/auth";
 import { NavLinks } from "./nav-links";
 import { NotificationBell } from "./notification-bell";
 import { ThemeToggle } from "./theme-toggle";
@@ -69,14 +70,19 @@ export function AppShell({
             <ThemeToggle />
             <NotificationBell />
             <AccountChip user={user} />
-            <Link
-              href="/logout"
-              aria-label="Sign out"
-              title="Sign out"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-muted transition hover:bg-surface-2 hover:text-foreground"
-            >
-              <LogOut className="h-[18px] w-[18px]" />
-            </Link>
+            {/* Sign out is a POST (server action), NOT a <Link>. A GET /logout
+               link gets prefetched by Next in production, which would silently
+               fire the logout and wipe the session on every page load. */}
+            <form action={logoutAction} className="flex">
+              <button
+                type="submit"
+                aria-label="Sign out"
+                title="Sign out"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-muted transition hover:bg-surface-2 hover:text-foreground"
+              >
+                <LogOut className="h-[18px] w-[18px]" />
+              </button>
+            </form>
           </div>
         </div>
       </header>

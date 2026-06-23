@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import type { AuthenticationResultType } from "@aws-sdk/client-cognito-identity-provider";
 import { db } from "@/server/db/client";
 import { users } from "@db/schema";
-import { demoLogin } from "@/server/config";
+import { demoLogin, authLog } from "@/server/config";
 import { verifyAccessToken } from "./verify";
 import { cognitoRefresh } from "./cognito";
 
@@ -103,11 +103,21 @@ function cacheSet(key: string, user: SessionUser) {
  */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const jar = await cookies();
+  const demoCookie = jar.get("abode_dev_user")?.value ?? null;
+  authLog("getCurrentUser — cookies:", {
+    accessToken: !!jar.get(AT)?.value,
+    refreshToken: !!jar.get(RT)?.value,
+    abode_dev_user: demoCookie,
+    demoLoginEnabled: demoLogin(),
+  });
 
   // Fast path: a recent navigation already resolved this exact credential.
   for (const k of cacheKeysFor(jar)) {
     const cached = cacheGet(k);
-    if (cached) return cached;
+    if (cached) {
+      authLog("→ resolved from cache:", cached.role, cached.email);
+      return cached;
+    }
   }
 
   const at = jar.get(AT)?.value;
@@ -150,19 +160,42 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 
   if (demoLogin()) {
     const devId = jar.get("abode_dev_user")?.value;
+    authLog("demo branch — abode_dev_user cookie:", devId ?? "(none)");
     if (devId) {
       try {
-        const [u] = await db.select().from(users).where(eq(users.id, devId)).limit(1);
+        // Normally the cookie is a seeded user's uuid. But if demoLoginAction
+        // ran during a DB outage (e.g. a rotated Aurora IP), it wrote a
+        // `dev:<role>` sentinel instead. Resolve that to the seeded user of
+        // that role so the session self-heals once the DB is reachable again,
+        // rather than bouncing to /login forever. A uuid is looked up by id;
+        // anything else (stale/garbage) is ignored without a DB error.
+        const sentinel = /^dev:(owner|employee|tenant)$/.exec(devId);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(devId);
+        let u;
+        if (sentinel) {
+          authLog("  cookie is a dev:<role> sentinel → looking up seeded", sentinel[1]);
+          [u] = await db.select().from(users).where(eq(users.role, sentinel[1] as Role)).limit(1);
+        } else if (isUuid) {
+          authLog("  cookie is a uuid → looking up by id");
+          [u] = await db.select().from(users).where(eq(users.id, devId)).limit(1);
+        } else {
+          authLog("  cookie is neither a sentinel nor a uuid → ignoring (will fail)");
+        }
         if (u) {
           const su = { id: u.id, role: u.role, email: u.email, fullName: u.fullName };
           cacheSet(`dev:${devId}`, su);
+          authLog("→ resolved demo user:", su.role, su.email, su.id);
           return su;
         }
-      } catch {
-        // DB not ready
+        authLog("  ✗ demo cookie did NOT resolve to a user (DB returned nothing)");
+      } catch (e) {
+        authLog("  ✗ demo lookup threw (DB unreachable?):", (e as Error).message);
       }
     }
+  } else {
+    authLog("demoLogin() is FALSE — demo branch skipped (ALLOW_DEMO_LOGIN / ALLOW_DEV_LOGIN not set?)");
   }
 
+  authLog("→ returning NULL — no session, caller will redirect to /login");
   return null;
 });

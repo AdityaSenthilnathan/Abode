@@ -20,13 +20,15 @@ export function navForRole(role: Role): NavItem[] {
         { href: "/messages", label: "Messages" },
       ];
     case "tenant":
+      // No "Settings" tab — the account chip in the header (which shows the
+      // tenant's name) links to /settings, so the profile *is* the settings
+      // entry point. See AccountChip in app-shell.tsx.
       return [
         { href: "/home", label: "Home" },
         { href: "/requests", label: "Requests" },
         { href: "/dues", label: "Dues" },
         { href: "/notifications", label: "Notifications" },
         { href: "/messages", label: "Messages" },
-        { href: "/settings", label: "Settings" },
       ];
   }
 }

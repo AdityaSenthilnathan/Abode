@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { authLog } from "@/server/config";
 import { getCurrentUser, type Role, type SessionUser } from "./session";
 
 export type { Role, SessionUser } from "./session";
@@ -19,7 +20,10 @@ export function roleHome(role: Role): string {
 /** Require any authenticated user, else redirect to login. */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    authLog("requireUser — NO session → redirecting to /login");
+    redirect("/login");
+  }
   return user;
 }
 
@@ -30,6 +34,10 @@ export async function requireUser(): Promise<SessionUser> {
  */
 export async function assertRole(role: Role): Promise<SessionUser> {
   const user = await requireUser();
-  if (user.role !== role) redirect(roleHome(user.role));
+  if (user.role !== role) {
+    authLog("assertRole — page wants", role, "but session is", user.role, "→ redirecting to", roleHome(user.role));
+    redirect(roleHome(user.role));
+  }
+  authLog("assertRole — OK:", user.role, user.email);
   return user;
 }

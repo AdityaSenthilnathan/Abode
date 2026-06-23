@@ -1,7 +1,7 @@
 "use server";
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db/client";
@@ -9,7 +9,7 @@ import { users } from "@db/schema";
 import { cognitoCreateUser, cognitoLogin } from "@/server/auth/cognito";
 import { setSessionCookies, clearSessionCookies } from "@/server/auth/session";
 import { roleHome } from "@/server/auth/guard";
-import { demoLogin } from "@/server/config";
+import { demoLogin, authLog } from "@/server/config";
 import {
   assertCodeValid,
   createUserRecord,
@@ -20,15 +20,25 @@ import type { Role } from "@/server/auth/session";
 
 /**
  * Cookie options for the seeded-user session cookie that demo/dev login sets.
- * `secure` in production so the cookie only rides over HTTPS, matching the real
- * Cognito token cookies in setSessionCookies().
+ *
+ * `secure` is keyed off the ACTUAL request protocol, not NODE_ENV. A production
+ * build served over plain HTTP — the local preview opened via its LAN URL
+ * (http://192.168.x:3001), or Safari on http://localhost — would otherwise get
+ * a Secure cookie the browser refuses to store on a non-HTTPS origin, so the
+ * session never sticks and every navigation bounces to /login. Behind a real
+ * HTTPS proxy (App Runner) `x-forwarded-proto` is "https", so it stays Secure
+ * in actual production.
  */
-function demoCookieOpts() {
+async function demoCookieOpts() {
+  const proto = (await headers()).get("x-forwarded-proto")?.split(",")[0].trim();
   return {
     httpOnly: true as const,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: proto === "https",
     path: "/",
+    // Persist for 30 days rather than being a session cookie, so a demo session
+    // survives tab/browser restarts instead of silently dropping.
+    maxAge: 60 * 60 * 24 * 30,
   };
 }
 
@@ -87,7 +97,7 @@ async function createAccount(email: string, pw: string, fullName: string, role: 
  */
 async function startSession(user: { id: string }, email: string, pw: string) {
   if (devAuthBypass()) {
-    (await cookies()).set("abode_dev_user", user.id, demoCookieOpts());
+    (await cookies()).set("abode_dev_user", user.id, await demoCookieOpts());
     return;
   }
   const auth = await cognitoLogin(email, pw);
@@ -118,7 +128,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
       return { error: "Dev DB unavailable — is Postgres running and seeded?" };
     }
     if (!row) return { error: "No account with that email yet — sign up first." };
-    (await cookies()).set("abode_dev_user", row.id, demoCookieOpts());
+    (await cookies()).set("abode_dev_user", row.id, await demoCookieOpts());
     redirect(roleHome(row.role));
   }
 
@@ -132,6 +142,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
 }
 
 export async function logoutAction(): Promise<void> {
+  authLog("logoutAction — clearing session cookies (user signed out)");
   await clearSessionCookies();
   redirect("/login");
 }
@@ -206,18 +217,29 @@ export async function signupTenantAction(_prev: AuthState, formData: FormData): 
  * creates an account or touches Cognito.
  */
 export async function demoLoginAction(formData: FormData): Promise<void> {
-  if (!demoLogin()) return;
   const role = String(formData.get("role")) as Role;
+  const enabled = demoLogin();
+  authLog("demoLoginAction — clicked role:", role, "| demoLogin() =", enabled);
+  if (!enabled) {
+    authLog("  ✗ demo login is DISABLED — click ignored (set ALLOW_DEMO_LOGIN/ALLOW_DEV_LOGIN)");
+    return;
+  }
   // Prefer a real seeded user so DB-backed pages work as normal. If the DB is
   // unreachable (e.g. Aurora paused/IP-locked), fall back to a `dev:<role>`
   // sentinel so role UIs can still be developed fully offline.
   let cookieValue = `dev:${role}`;
   try {
     const [u] = await db.select().from(users).where(eq(users.role, role)).limit(1);
-    if (u) cookieValue = u.id;
-  } catch {
-    // DB down — keep the synthetic sentinel.
+    if (u) {
+      cookieValue = u.id;
+      authLog("  DB lookup OK — seeded", role, "id:", u.id);
+    } else {
+      authLog("  ✗ no seeded user with role", role, "— using sentinel", cookieValue);
+    }
+  } catch (e) {
+    authLog("  ✗ DB lookup FAILED (DB down) — using sentinel", cookieValue, "|", (e as Error).message);
   }
-  (await cookies()).set("abode_dev_user", cookieValue, demoCookieOpts());
+  authLog("  setting cookie abode_dev_user =", cookieValue, "→ redirecting to", roleHome(role));
+  (await cookies()).set("abode_dev_user", cookieValue, await demoCookieOpts());
   redirect(roleHome(role));
 }

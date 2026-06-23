@@ -47,6 +47,18 @@ export function demoLogin(): boolean {
   return process.env.ALLOW_DEMO_LOGIN === "true" || devBypass();
 }
 
+/**
+ * Verbose auth tracing, printed to the server terminal. On automatically in
+ * non-production, or anywhere DEBUG_AUTH=true. Used to see exactly why a demo
+ * session resolves or bounces to /login. Never logs token values — only their
+ * presence and the (non-secret) demo cookie.
+ */
+export function authLog(...args: unknown[]): void {
+  if (process.env.DEBUG_AUTH === "true" || process.env.NODE_ENV !== "production") {
+    console.log("🔐 [auth]", ...args);
+  }
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   appUrl: opt("APP_URL") ?? "http://localhost:3000",
