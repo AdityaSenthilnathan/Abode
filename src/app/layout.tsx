@@ -29,10 +29,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Apply the saved theme before paint to avoid a flash of the wrong mode. */}
+        {/* Apply the saved theme + text size before paint to avoid a flash. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}}catch(e){}})();`,
+            __html: `(function(){try{var d=document.documentElement;var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){d.dataset.theme=t;}var s=localStorage.getItem('textSize');if(s==='medium'||s==='large'){d.dataset.textSize=s;}}catch(e){}})();`,
           }}
         />
       </head>

@@ -99,6 +99,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Tenant text-size preference (Account → Display). Scales the root font-size so
+   the whole rem-based UI grows proportionally — bigger text and touch targets,
+   which helps older tenants. Set on <html> via the pre-paint script in
+   app/layout.tsx + the TextSizeControl; absent = the default 16px. */
+html[data-text-size="medium"] { font-size: 17.5px; }
+html[data-text-size="large"] { font-size: 20px; }
+
 /* A whisper of brand light at the top of the page for depth. */
 body::before {
   content: "";

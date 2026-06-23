@@ -26,6 +26,7 @@ export function navForRole(role: Role): NavItem[] {
         { href: "/dues", label: "Dues" },
         { href: "/notifications", label: "Notifications" },
         { href: "/messages", label: "Messages" },
+        { href: "/settings", label: "Settings" },
       ];
   }
 }

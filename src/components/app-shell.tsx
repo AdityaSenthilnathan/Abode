@@ -17,6 +17,30 @@ function initials(user: SessionUser): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || base[0]?.toUpperCase() || "?";
 }
 
+/** Account identity in the header. For tenants it links to their Account page. */
+function AccountChip({ user }: { user: SessionUser }) {
+  const inner = (
+    <>
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
+        {initials(user)}
+      </span>
+      <span className="hidden leading-tight sm:block">
+        <span className="block text-xs font-medium">{user.fullName ?? user.email}</span>
+        <span className="block text-[11px] capitalize text-muted">{user.role}</span>
+      </span>
+    </>
+  );
+  const cls = "flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-1 sm:pr-3";
+  if (user.role === "tenant") {
+    return (
+      <Link href="/settings" title="Account settings" className={`${cls} transition hover:bg-surface-2`}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={cls}>{inner}</div>;
+}
+
 /** Shared chrome for the three role experiences: header, nav, account, sign-out. */
 export function AppShell({
   user,
@@ -44,15 +68,7 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
             <NotificationBell />
-            <div className="flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-1 sm:pr-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
-                {initials(user)}
-              </span>
-              <span className="hidden leading-tight sm:block">
-                <span className="block text-xs font-medium">{user.fullName ?? user.email}</span>
-                <span className="block text-[11px] capitalize text-muted">{user.role}</span>
-              </span>
-            </div>
+            <AccountChip user={user} />
             <Link
               href="/logout"
               aria-label="Sign out"
