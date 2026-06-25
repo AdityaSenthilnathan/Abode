@@ -5,6 +5,7 @@ import { assertRole } from "@/server/auth/guard";
 import { requestDetail } from "@/server/services/requests";
 import { getOrCreateOwnerConversation } from "@/server/services/messaging";
 import { Badge, Card, button, requestTone } from "@/components/ui";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const STEPS = [
   { key: "received", label: "Received", icon: Inbox },
@@ -48,6 +49,7 @@ export default async function RequestDetailPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <AutoRefresh />
       <div>
         <Link href="/requests" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Requests

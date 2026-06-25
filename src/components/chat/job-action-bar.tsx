@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { formatCents } from "@/lib/utils";
 import { ReceiptUpload } from "@/components/handyman/receipt-upload";
+import { MoneyInput } from "@/components/ui/money-input";
 import type { ConversationJob } from "@/server/services/messaging";
 import {
   chatAcceptCompletionAction,
@@ -13,7 +14,6 @@ import {
   chatSubmitEstimateAction,
 } from "@/actions/job-chat";
 
-const field = "rounded-lg border border-line bg-background px-2.5 py-1.5 text-sm outline-none transition focus:border-brand";
 const primaryBtn =
   "rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-brand-foreground transition hover:brightness-110";
 const ghostBtn = "rounded-lg border border-line px-3 py-1.5 text-sm font-medium transition hover:bg-surface-2";
@@ -37,13 +37,19 @@ export function JobActionBar({
   job,
   role,
   conversationId,
+  conversationType,
 }: {
   job: ConversationJob;
   role: string;
   conversationId: string;
+  conversationType: string;
 }) {
   const isOwner = role === "owner";
   const isEmployee = role === "employee";
+  // The job workflow (estimate, receipts, completion, approvals) lives only in
+  // the owner↔handyman thread. The handyman↔tenant chat is for coordination, so
+  // the job shows as read-only context — no receipt/estimate/completion controls.
+  const isManagerThread = conversationType === "owner_handyman";
   const ids = (
     <>
       <input type="hidden" name="conversationId" value={conversationId} />
@@ -51,8 +57,11 @@ export function JobActionBar({
     </>
   );
 
-  let action: ReactNode;
-  if (job.status === "done") {
+  let action: ReactNode = null;
+  if (!isManagerThread) {
+    // Tenant chat (or any non-manager thread): show the job header only, no actions.
+    action = null;
+  } else if (job.status === "done") {
     action = (
       <div className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
         ✅ Job complete{job.finalCostCents != null ? ` · ${formatCents(job.finalCostCents)}` : ""}
@@ -77,8 +86,7 @@ export function JobActionBar({
     action = isEmployee ? (
       <form action={chatSubmitEstimateAction} className="flex items-center gap-2">
         {ids}
-        <span className="text-sm text-muted">$</span>
-        <input name="amount" type="number" step="0.01" min="0" placeholder="Estimate" required className={`${field} w-28`} />
+        <MoneyInput name="amount" placeholder="Estimate" required widthClass="w-28" />
         <button className={primaryBtn}>Send estimate</button>
       </form>
     ) : (
@@ -110,8 +118,7 @@ export function JobActionBar({
         {job.receiptCount > 0 && (
           <form action={chatSubmitCompletionAction} className="flex items-center gap-2 border-t border-line pt-2.5">
             {ids}
-            <span className="text-sm text-muted">$</span>
-            <input name="finalCost" type="number" step="0.01" min="0" placeholder="Final cost" required className={`${field} w-28`} />
+            <MoneyInput name="finalCost" placeholder="Final cost" required widthClass="w-28" />
             <button className={primaryBtn}>Mark finished</button>
           </form>
         )}
@@ -151,7 +158,7 @@ export function JobActionBar({
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${s.cls}`}>{s.label}</span>
       </div>
-      <div className="mt-2">{action}</div>
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }

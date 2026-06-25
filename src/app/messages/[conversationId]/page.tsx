@@ -24,6 +24,7 @@ export default async function Thread({
         meId={user.id}
         title={thread.otherName}
         role={user.role}
+        conversationType={thread.conversation.type}
         job={job}
         messages={thread.messages.map((m) => ({
           id: m.id,

@@ -1,7 +1,9 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
-import { invoices, properties, propertyEmployees, units, users } from "@db/schema";
+import { invoices, properties, propertyEmployees, tasks, units, users } from "@db/schema";
+import { getPayoutCard, type PayoutCard } from "./earnings";
+import { listEmployeeProperties } from "./onboarding";
 
 export interface TenantContact {
   id: string;
@@ -83,5 +85,82 @@ export async function getTenantAccount(userId: string): Promise<TenantAccount | 
     manager: directory.manager,
     maintenance: directory.maintenance,
     balanceCents,
+  };
+}
+
+export interface AccountContact {
+  fullName: string | null;
+  email: string;
+}
+
+export interface HandymanAccountProperty {
+  id: string;
+  name: string;
+  address: string | null;
+  managerName: string | null;
+  managerEmail: string | null;
+}
+
+export interface HandymanAccount {
+  properties: HandymanAccountProperty[];
+  /** Deduped property managers the worker reports to (one row per manager). */
+  managers: AccountContact[];
+  stats: { activeJobs: number; completedJobs: number; totalEarnedCents: number };
+  payout: PayoutCard | null;
+}
+
+/**
+ * Everything a handyman sees on their account page: the properties they're
+ * linked to (and who manages each), lifetime job stats, and their saved payout
+ * method. Job + payout reads run as the worker (RLS, filtered to assignedTo);
+ * the property + manager directory comes from listEmployeeProperties (asAdmin) —
+ * the same trusted directory lookup the Jobs page already relies on.
+ */
+export async function getHandymanAccount(userId: string): Promise<HandymanAccount> {
+  const [props, taskRows, payout] = await Promise.all([
+    listEmployeeProperties(userId),
+    withUser(userId, (tx) =>
+      tx
+        .select({ status: tasks.status, finalCostCents: tasks.finalCostCents })
+        .from(tasks)
+        .where(eq(tasks.assignedTo, userId)),
+    ),
+    getPayoutCard(userId),
+  ]);
+
+  let activeJobs = 0;
+  let completedJobs = 0;
+  let totalEarnedCents = 0;
+  for (const t of taskRows) {
+    if (t.status === "done") {
+      completedJobs += 1;
+      totalEarnedCents += t.finalCostCents ?? 0;
+    } else {
+      activeJobs += 1;
+    }
+  }
+
+  const propertyList: HandymanAccountProperty[] = props.map((p) => ({
+    id: p.propertyId,
+    name: p.name,
+    address: p.address,
+    managerName: p.ownerName,
+    managerEmail: p.ownerEmail,
+  }));
+
+  // One contact per manager — a worker can hold several properties under the same manager.
+  const seen = new Set<string>();
+  const managers: AccountContact[] = [];
+  for (const p of props) {
+    if (!p.ownerEmail || seen.has(p.ownerEmail)) continue;
+    seen.add(p.ownerEmail);
+    managers.push({ fullName: p.ownerName, email: p.ownerEmail });
+  }
+
+  return {
+    properties: propertyList,
+    managers,
+    stats: { activeJobs, completedJobs, totalEarnedCents },
+    payout,
   };
 }

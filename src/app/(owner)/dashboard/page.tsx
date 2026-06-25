@@ -2,6 +2,7 @@ import { assertRole } from "@/server/auth/guard";
 import { ownerGrid, ownerStats } from "@/server/services/owner";
 import { formatCents } from "@/lib/utils";
 import { NotConnected } from "@/components/not-connected";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
@@ -34,6 +35,7 @@ export default async function OwnerDashboard() {
 
   return (
     <div className="space-y-8">
+      <AutoRefresh />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm opacity-60">Your portfolio at a glance.</p>

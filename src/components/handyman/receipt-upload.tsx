@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Paperclip, Plus, X } from "lucide-react";
 import { addReceiptAction } from "@/actions/handyman";
+import { MoneyInput } from "@/components/ui/money-input";
 
 const field =
   "rounded-lg border border-line bg-background px-2.5 py-1.5 text-sm outline-none transition focus:border-brand";
@@ -117,18 +118,7 @@ export function ReceiptUpload({ taskId }: { taskId: string }) {
           <Paperclip className="h-[18px] w-[18px]" />
         </button>
 
-        <div className="flex items-center rounded-lg border border-line bg-background pl-2.5 transition focus-within:border-brand">
-          <span className="text-sm text-muted">$</span>
-          <input
-            name="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="Amount"
-            required
-            className="w-24 bg-transparent px-1.5 py-1.5 text-sm outline-none"
-          />
-        </div>
+        <MoneyInput name="amount" placeholder="Amount" required widthClass="w-28" />
 
         <input name="description" placeholder="What for?" className={`${field} min-w-[8rem] flex-1`} />
 

@@ -5,6 +5,7 @@ import { listEmployeeProperties } from "@/server/services/onboarding";
 import { JobsList, type JobCard } from "@/components/handyman/jobs-list";
 import { JoinPropertyForm } from "@/components/handyman/join-property-form";
 import { NotConnected } from "@/components/not-connected";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function JobsPage() {
   const user = await assertRole("employee");
@@ -33,6 +34,7 @@ export default async function JobsPage() {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Jobs</h1>

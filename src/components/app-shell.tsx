@@ -18,7 +18,7 @@ function initials(user: SessionUser): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || base[0]?.toUpperCase() || "?";
 }
 
-/** Account identity in the header. For tenants it links to their Account page. */
+/** Account identity in the header. Tenants and handymen link to their account page. */
 function AccountChip({ user }: { user: SessionUser }) {
   const inner = (
     <>
@@ -32,9 +32,12 @@ function AccountChip({ user }: { user: SessionUser }) {
     </>
   );
   const cls = "flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-1 sm:pr-3";
-  if (user.role === "tenant") {
+  // Tenants and handymen each have an account page; the chip is its entry point.
+  const accountHref =
+    user.role === "tenant" ? "/settings" : user.role === "employee" ? "/account" : null;
+  if (accountHref) {
     return (
-      <Link href="/settings" title="Account settings" className={`${cls} transition hover:bg-surface-2`}>
+      <Link href={accountHref} title="Account settings" className={`${cls} transition hover:bg-surface-2`}>
         {inner}
       </Link>
     );

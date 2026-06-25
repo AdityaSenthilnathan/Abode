@@ -36,6 +36,7 @@ export function ChatThread({
   messages,
   job,
   role,
+  conversationType,
 }: {
   conversationId: string;
   meId: string;
@@ -43,6 +44,7 @@ export function ChatThread({
   messages: ChatMessage[];
   job: ConversationJob | null;
   role: string;
+  conversationType: string;
 }) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
@@ -104,7 +106,14 @@ export function ChatThread({
         </Link>
         <span className="font-semibold">{title}</span>
       </div>
-      {job && <JobActionBar job={job} role={role} conversationId={conversationId} />}
+      {job && (
+        <JobActionBar
+          job={job}
+          role={role}
+          conversationId={conversationId}
+          conversationType={conversationType}
+        />
+      )}
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {msgs.length === 0 && <p className="text-sm text-muted">No messages yet. Say hello.</p>}
         {msgs.map((m, i) => {

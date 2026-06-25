@@ -3,6 +3,7 @@ import { fixItBoard } from "@/server/services/owner";
 import { acceptCompletionAction, approveEstimateAction, assignTaskAction } from "@/actions/owner";
 import { formatCents } from "@/lib/utils";
 import { NotConnected } from "@/components/not-connected";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const input =
   "rounded-lg border border-black/15 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/20";
@@ -28,6 +29,7 @@ export default async function FixItPage() {
 
   return (
     <div className="space-y-8">
+      <AutoRefresh />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Fix-it</h1>
         <p className="text-sm opacity-60">Assign open requests to handymen and track jobs.</p>

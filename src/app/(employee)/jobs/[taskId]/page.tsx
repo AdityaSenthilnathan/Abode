@@ -25,6 +25,7 @@ import {
 import { ReceiptUpload } from "@/components/handyman/receipt-upload";
 import { JobLocationMap } from "@/components/handyman/job-location-map";
 import { formatCents } from "@/lib/utils";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const input =
   "rounded-lg border border-black/15 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/20";
@@ -88,6 +89,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ task
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      <AutoRefresh />
       <Link
         href="/jobs"
         className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
