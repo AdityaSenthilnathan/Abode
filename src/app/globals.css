@@ -26,7 +26,7 @@
   --surface-2: #f1e7d8;
   --line: #e8dcc9;
   --foreground: #2a221c;
-  --muted: #7c6f60;
+  --muted: #665a49;
   --brand: #c0613a;
   --brand-foreground: #fff8f0;
   --ring: #c0613a;
@@ -435,10 +435,21 @@ body::before {
 
 /* --- glass surfaces ----------------------------------------------------- */
 .glass {
-  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  /* Light mode: kept less see-through so chart/content reads clearly over the
+     photo backdrop (still slightly translucent, not solid). Dark mode keeps the
+     original 70% via the overrides below. */
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   border: 1px solid color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .glass {
+    background: color-mix(in oklab, var(--surface) 70%, transparent);
+  }
+}
+:root[data-theme="dark"] .glass {
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
 }
 .glass-strong {
   background: color-mix(in oklab, var(--surface) 86%, transparent);
