@@ -177,6 +177,10 @@ export async function assignTask(
       await tx
         .insert(conversations)
         .values({ participantA: ownerId, participantB: opts.assignedTo, type: "owner_handyman", taskId: task.id });
+    } else {
+      // Reuse the one manager↔handyman thread, but point it at the job just
+      // assigned so the in-chat workflow widget tracks the current job.
+      await tx.update(conversations).set({ taskId: task.id }).where(eq(conversations.id, existingConvo.id));
     }
 
     await tx.insert(notifications).values({

@@ -288,8 +288,11 @@ export async function getOrCreateHandymanTenantConversation(
   });
 }
 
-/** Ensure the handyman has both the manager and tenant conversations for a job. */
-export async function ensureJobConversations(handymanId: string, taskId: string): Promise<void> {
+/** Ensure the handyman has both the manager and tenant conversations for a job. Returns the manager chat id. */
+export async function ensureJobConversations(
+  handymanId: string,
+  taskId: string,
+): Promise<{ ownerConversationId: string | null }> {
   const info = await asAdmin(async (tx) => {
     const [t] = await tx
       .select()
@@ -315,32 +318,54 @@ export async function ensureJobConversations(handymanId: string, taskId: string)
     return { ownerId: prop?.ownerId ?? null, tenantId };
   });
   if (!info) throw new Error("Job not found");
-  if (info.ownerId) await getOrCreateTaskConversation(info.ownerId, handymanId, taskId);
+  let ownerConversationId: string | null = null;
+  if (info.ownerId) ownerConversationId = await getOrCreateOwnerHandymanConversation(info.ownerId, handymanId, taskId);
   if (info.tenantId) await getOrCreateHandymanTenantConversation(handymanId, info.tenantId, taskId);
+  return { ownerConversationId };
 }
 
-/** Post a message from the handyman into the manager (owner↔handyman) chat for a task. */
+/** Post a message from the handyman into the one manager (owner↔handyman) chat, scoped to this job. */
 export async function messageManagerForTask(handymanId: string, taskId: string, body: string): Promise<void> {
-  await ensureJobConversations(handymanId, taskId);
-  await withUser(handymanId, async (tx) => {
-    const [c] = await tx
-      .select()
-      .from(conversations)
-      .where(and(eq(conversations.type, "owner_handyman"), eq(conversations.taskId, taskId)))
-      .limit(1);
-    if (c) await tx.insert(messages).values({ conversationId: c.id, senderId: handymanId, body });
-  });
+  const { ownerConversationId } = await ensureJobConversations(handymanId, taskId);
+  if (!ownerConversationId) return;
+  await withUser(handymanId, (tx) =>
+    tx.insert(messages).values({ conversationId: ownerConversationId, senderId: handymanId, body }),
+  );
 }
 
-/** Owner↔handyman conversation for a task (created when a task is assigned). */
-export async function getOrCreateTaskConversation(ownerId: string, handymanId: string, taskId: string): Promise<string> {
+/**
+ * The single owner↔handyman conversation for this pair — one chat per manager,
+ * reused across every job they assign (and across all the properties that
+ * manager owns). Keyed by the participant pair, NOT by task, so a worker with
+ * several jobs from the same manager never ends up with duplicate threads.
+ * `taskId` is repointed at the given task so the in-chat job widget tracks the
+ * job the worker is currently acting on.
+ */
+export async function getOrCreateOwnerHandymanConversation(
+  ownerId: string,
+  handymanId: string,
+  taskId: string,
+): Promise<string> {
   return asAdmin(async (tx) => {
     const [existing] = await tx
       .select()
       .from(conversations)
-      .where(and(eq(conversations.type, "owner_handyman"), eq(conversations.taskId, taskId)))
+      .where(
+        and(
+          eq(conversations.type, "owner_handyman"),
+          or(
+            and(eq(conversations.participantA, ownerId), eq(conversations.participantB, handymanId)),
+            and(eq(conversations.participantA, handymanId), eq(conversations.participantB, ownerId)),
+          ),
+        ),
+      )
       .limit(1);
-    if (existing) return existing.id;
+    if (existing) {
+      if (taskId && existing.taskId !== taskId) {
+        await tx.update(conversations).set({ taskId }).where(eq(conversations.id, existing.id));
+      }
+      return existing.id;
+    }
     const [c] = await tx
       .insert(conversations)
       .values({ participantA: ownerId, participantB: handymanId, type: "owner_handyman", taskId })

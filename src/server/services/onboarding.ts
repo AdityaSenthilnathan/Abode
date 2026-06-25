@@ -203,7 +203,12 @@ export async function redeemTenantCode(code: string, userId: string) {
   });
 }
 
-/** Employee redeems an employer code → linked to the property. */
+/**
+ * Employee redeems an employer code → linked to the property. A worker can hold
+ * links to many properties (across many managers) at once — the join is
+ * many-to-many and the insert is idempotent, so redeeming again is harmless.
+ * Returns the invite plus the property's name for a friendly confirmation.
+ */
 export async function redeemEmployeeCode(code: string, userId: string) {
   return asAdmin(async (tx) => {
     const [inv] = await tx
@@ -217,6 +222,27 @@ export async function redeemEmployeeCode(code: string, userId: string) {
       .values({ propertyId: inv.propertyId, employeeId: userId })
       .onConflictDoNothing();
     await tx.update(inviteCodes).set({ redeemedBy: userId, redeemedAt: new Date() }).where(eq(inviteCodes.id, inv.id));
-    return inv;
+    const [prop] = await tx.select({ name: properties.name }).from(properties).where(eq(properties.id, inv.propertyId)).limit(1);
+    return { ...inv, propertyName: prop?.name ?? null };
   });
+}
+
+/** Properties this worker is currently linked to, with the owning manager's name. */
+export async function listEmployeeProperties(employeeId: string) {
+  return asAdmin((tx) =>
+    tx
+      .select({
+        propertyId: properties.id,
+        name: properties.name,
+        address: properties.address,
+        ownerName: users.fullName,
+        ownerEmail: users.email,
+        jobCount: propertyEmployees.jobCount,
+      })
+      .from(propertyEmployees)
+      .innerJoin(properties, eq(properties.id, propertyEmployees.propertyId))
+      .leftJoin(users, eq(users.id, properties.ownerId))
+      .where(eq(propertyEmployees.employeeId, employeeId))
+      .orderBy(properties.name),
+  );
 }
