@@ -146,7 +146,7 @@ export default async function Home() {
         <div className="text-center lg:text-left">
           <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs font-medium text-muted backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-brand" />
-            For property owners &amp; managers
+            For independent owners &amp; small landlords
           </span>
 
           <h1
@@ -161,8 +161,8 @@ export default async function Home() {
             className="animate-fade-up mx-auto mt-5 max-w-md text-pretty text-lg text-muted lg:mx-0"
             style={{ animationDelay: "0.16s" }}
           >
-            Collect rent, dispatch maintenance, and keep tenants happy — all from
-            one calm place.
+            Everything the big management companies do — without the thousands in
+            fees. Free to get started.
           </p>
 
           <div
@@ -211,8 +211,9 @@ export default async function Home() {
             Run more doors with less of your day
           </h2>
           <p className="mx-auto mt-2 max-w-md text-pretty text-muted">
-            Tenants and crew each get their own app. You get the control room they
-            feed into.
+            The tools a management company charges thousands for — built for owners
+            who&apos;d rather keep that money. Tenants and crew each get their own
+            app; you get the control room they feed into.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -245,7 +246,8 @@ export default async function Home() {
             Get your weekends back.
           </h2>
           <p className="relative mx-auto mt-3 max-w-sm text-pretty text-muted">
-            Set up your first property in minutes. Abode handles the busywork.
+            Set up your first property in minutes. No contracts, no per-unit fees —
+            start free and let Abode handle the busywork.
           </p>
           <div className="relative mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
