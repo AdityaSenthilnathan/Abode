@@ -38,12 +38,20 @@ export async function createUserRecord(opts: {
 /** Owner creates a property they own — the first step a new owner must take. */
 export async function createProperty(
   ownerId: string,
-  opts: { name: string; address?: string | null },
+  opts: { name: string; address?: string | null; lat?: number | null; lng?: number | null },
 ) {
   return asAdmin(async (tx) => {
     const [row] = await tx
       .insert(properties)
-      .values({ ownerId, name: opts.name, address: opts.address ?? null })
+      .values({
+        ownerId,
+        name: opts.name,
+        address: opts.address ?? null,
+        // numeric columns take string values; keep the geocoded coords so the
+        // handyman map can pin this property accurately.
+        lat: opts.lat != null ? String(opts.lat) : null,
+        lng: opts.lng != null ? String(opts.lng) : null,
+      })
       .returning();
     return row;
   });

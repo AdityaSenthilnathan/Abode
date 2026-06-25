@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { assertRole } from "@/server/auth/guard";
 import { withUser } from "@/server/db/rls";
@@ -9,6 +9,7 @@ import {
   generateTenantCodeAction,
 } from "@/actions/invites";
 import { NotConnected } from "@/components/not-connected";
+import { AddPropertyForm } from "@/components/owner/add-property-form";
 import { PropertyCard } from "@/components/owner/property-card";
 
 async function load(userId: string) {
@@ -42,7 +43,23 @@ async function load(userId: string) {
       list.push(u);
       unitsByProp.set(u.propertyId, list);
     }
-    const vacant = allUnits.filter((u) => u.status === "vacant");
+    // The current unredeemed tenant code per unit (if any) — so a vacant unit
+    // shows its existing code instead of offering to mint a duplicate.
+    const pendingTenantCodes = await tx
+      .select({ unitId: inviteCodes.unitId, code: inviteCodes.code })
+      .from(inviteCodes)
+      .where(and(eq(inviteCodes.kind, "tenant"), isNull(inviteCodes.redeemedAt)));
+    const codeByUnit = new Map<string, string>();
+    for (const c of pendingTenantCodes) if (c.unitId) codeByUnit.set(c.unitId, c.code);
+
+    const propNameById = new Map(props.map((p) => [p.id, p.name]));
+    const vacant = allUnits
+      .filter((u) => u.status === "vacant")
+      .map((u) => ({
+        ...u,
+        propertyName: propNameById.get(u.propertyId) ?? null,
+        pendingCode: codeByUnit.get(u.id) ?? null,
+      }));
     return { props, unitsByProp, vacant, codes };
   });
 }
@@ -71,32 +88,10 @@ export default async function InvitesPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Your properties</h2>
 
-        <form
+        <AddPropertyForm
           action={createPropertyAction}
-          className="flex flex-wrap items-end gap-2 rounded-xl border border-black/10 p-3 dark:border-white/15"
-        >
-          <label className="flex flex-col gap-1 text-xs">
-            <span className="opacity-60">Property name</span>
-            <input
-              name="name"
-              required
-              placeholder="Maple Court"
-              className="rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/20"
-            />
-          </label>
-          <label className="flex flex-1 flex-col gap-1 text-xs">
-            <span className="opacity-60">Address</span>
-            <input
-              name="address"
-              required
-              placeholder="123 Main St"
-              className="rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/20"
-            />
-          </label>
-          <button className="rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background">
-            Add property
-          </button>
-        </form>
+          token={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
+        />
 
         {data.props.length === 0 ? (
           <p className="text-sm opacity-60">No properties yet — add your first one above.</p>
@@ -119,13 +114,24 @@ export default async function InvitesPage() {
               <form
                 key={u.id}
                 action={generateTenantCodeAction}
-                className="flex items-center justify-between rounded-xl border border-black/10 p-3 dark:border-white/15"
+                className="flex items-center justify-between gap-2 rounded-xl border border-black/10 p-3 dark:border-white/15"
               >
-                <span className="font-medium">Unit {u.unitNumber}</span>
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">Unit {u.unitNumber}</span>
+                  {u.propertyName && (
+                    <span className="block truncate text-xs opacity-60">{u.propertyName}</span>
+                  )}
+                </span>
                 <input type="hidden" name="unitId" value={u.id} />
-                <button className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-                  Generate code
-                </button>
+                {u.pendingCode ? (
+                  <code className="shrink-0 rounded-md bg-black/5 px-2 py-1 font-mono text-xs dark:bg-white/10">
+                    {u.pendingCode}
+                  </code>
+                ) : (
+                  <button className="shrink-0 rounded-md border border-black/15 px-2.5 py-1.5 text-xs hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                    Generate code
+                  </button>
+                )}
               </form>
             ))}
           </div>
