@@ -34,7 +34,7 @@ export function ChatThread({
   meId,
   title,
   messages,
-  job,
+  job: initialJob,
   role,
   conversationType,
 }: {
@@ -49,20 +49,27 @@ export function ChatThread({
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [msgs, setMsgs] = useState<ChatMessage[]>(messages);
+  const [job, setJob] = useState<ConversationJob | null>(initialJob);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // sync when the server component re-renders with fresh messages
+  // sync when the server component re-renders with fresh data
   useEffect(() => setMsgs(messages), [messages]);
+  useEffect(() => setJob(initialJob), [initialJob]);
 
-  // light polling for incoming messages (AppSync Events is the production upgrade)
+  // Light polling for incoming messages *and* live job-workflow state, so the
+  // owner's Approve/Accept buttons surface within ~3s of the handyman acting —
+  // no reload needed. AppSync Events is the production upgrade.
   useEffect(() => {
     let alive = true;
     const id = setInterval(async () => {
       try {
         const r = await fetch(`/api/conversations/${conversationId}/messages`);
         if (r.ok) {
-          const j = (await r.json()) as { messages: ChatMessage[] };
-          if (alive) setMsgs(j.messages);
+          const j = (await r.json()) as { messages: ChatMessage[]; job: ConversationJob | null };
+          if (alive) {
+            setMsgs(j.messages);
+            setJob(j.job);
+          }
         }
       } catch {
         /* ignore */

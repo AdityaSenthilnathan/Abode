@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
 import { conversations, maintenanceRequests, messages, properties, taskReceipts, tasks, units, users } from "@db/schema";
 import type { Task } from "@db/schema";
@@ -371,5 +371,22 @@ export async function getOrCreateOwnerHandymanConversation(
       .values({ participantA: ownerId, participantB: handymanId, type: "owner_handyman", taskId })
       .returning();
     return c.id;
+  });
+}
+
+/**
+ * Count of incoming, not-yet-read messages across all of the user's
+ * conversations — drives the global Messages-tab badge so new messages surface
+ * on any screen, not just inside an open thread. RLS scopes `messages` to the
+ * user's own conversations (same visibility as getThread), so counting rows the
+ * user didn't send and hasn't read yields their unread total.
+ */
+export async function unreadMessageCount(userId: string): Promise<number> {
+  return withUser(userId, async (tx) => {
+    const [row] = await tx
+      .select({ n: count() })
+      .from(messages)
+      .where(and(ne(messages.senderId, userId), isNull(messages.readAt)));
+    return Number(row?.n ?? 0);
   });
 }

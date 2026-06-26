@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/server/auth/session";
-import { getThread } from "@/server/services/messaging";
+import { getConversationJob, getThread } from "@/server/services/messaging";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ conversationId: string }> }) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ messages: [] }, { status: 401 });
+  if (!user) return NextResponse.json({ messages: [], job: null }, { status: 401 });
   const { conversationId } = await params;
-  const thread = await getThread(user.id, conversationId);
-  if (!thread) return NextResponse.json({ messages: [] }, { status: 404 });
+  // Return the job alongside messages so the in-chat workflow bar (estimate →
+  // approve → complete → sign-off) stays live — the owner's Approve/Accept
+  // buttons appear without a reload, on the same 3s cadence as messages.
+  const [thread, job] = await Promise.all([
+    getThread(user.id, conversationId),
+    getConversationJob(user.id, conversationId),
+  ]);
+  if (!thread) return NextResponse.json({ messages: [], job: null }, { status: 404 });
   return NextResponse.json({
     messages: thread.messages.map((m) => ({
       id: m.id,
@@ -18,5 +24,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ convers
       deliveredAt: m.deliveredAt ? new Date(m.deliveredAt).toISOString() : null,
       readAt: m.readAt ? new Date(m.readAt).toISOString() : null,
     })),
+    job,
   });
 }

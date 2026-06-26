@@ -4,6 +4,7 @@ import { getOrCreateOwnerConversation, listConversationsForUser } from "@/server
 import { NotConnected } from "@/components/not-connected";
 import { EmptyState } from "@/components/ui";
 import { MessagesList, type SelectedJob } from "@/components/messages/messages-list";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function MessagesPage({
   searchParams,
@@ -33,6 +34,7 @@ export default async function MessagesPage({
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Messages</h1>
         <p className="mt-1 text-sm text-muted">Your conversations.</p>
