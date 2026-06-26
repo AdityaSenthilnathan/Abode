@@ -37,6 +37,7 @@ export function ChatThread({
   job: initialJob,
   role,
   conversationType,
+  initialDraft,
 }: {
   conversationId: string;
   meId: string;
@@ -45,12 +46,29 @@ export function ChatThread({
   job: ConversationJob | null;
   role: string;
   conversationType: string;
+  initialDraft?: string;
 }) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [msgs, setMsgs] = useState<ChatMessage[]>(messages);
   const [job, setJob] = useState<ConversationJob | null>(initialJob);
+  const [body, setBody] = useState(initialDraft ?? "");
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Prefill from a ?draft= deep link (e.g. "Request to pay later" on Dues):
+  // focus the composer with the cursor at the end, then strip the param so a
+  // later refresh won't re-fill it.
+  useEffect(() => {
+    if (!initialDraft) return;
+    const el = inputRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+    window.history.replaceState(null, "", `/messages/${conversationId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // sync when the server component re-renders with fresh data
   useEffect(() => setMsgs(messages), [messages]);
@@ -87,12 +105,11 @@ export function ChatThread({
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-    const body = String(new FormData(form).get("body") ?? "").trim();
-    if (!body) return;
+    const trimmed = body.trim();
+    if (!trimmed) return;
     setSending(true);
-    form.reset();
-    await sendMessageAction(conversationId, body);
+    setBody("");
+    await sendMessageAction(conversationId, trimmed);
     setSending(false);
     router.refresh();
   }
@@ -143,9 +160,12 @@ export function ChatThread({
       </div>
       <form onSubmit={onSubmit} className="flex gap-2 border-t border-line p-3">
         <input
+          ref={inputRef}
           name="body"
           autoComplete="off"
           placeholder="Message…"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
           className="flex-1 rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm outline-none transition focus:border-brand"
         />
         <button

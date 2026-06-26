@@ -127,3 +127,44 @@ export function invoiceTone(status: string): Tone {
 export function requestTone(status: string): Tone {
   return status === "done" ? "success" : status === "working" ? "warning" : "info";
 }
+
+/** Relative urgency for an invoice due date — "Overdue by 3 days", "Due tomorrow", … */
+export function relativeDue(dueDate: string): { label: string; tone: Tone; days: number } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${dueDate}T00:00:00`);
+  const days = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  if (days < 0)
+    return { label: days === -1 ? "Overdue by 1 day" : `Overdue by ${-days} days`, tone: "danger", days };
+  if (days === 0) return { label: "Due today", tone: "warning", days };
+  if (days === 1) return { label: "Due tomorrow", tone: "warning", days };
+  if (days <= 7) return { label: `Due in ${days} days`, tone: "warning", days };
+  return { label: `Due in ${days} days`, tone: "neutral", days };
+}
+
+/** Sort comparator: outstanding invoices first (soonest/overdue first), paid last. */
+export function byInvoiceUrgency(
+  a: { status: string; dueDate: string },
+  b: { status: string; dueDate: string },
+): number {
+  const rank = (s: string) => (s === "paid" ? 1 : 0);
+  return rank(a.status) - rank(b.status) || a.dueDate.localeCompare(b.dueDate);
+}
+
+/** Inline due-date line: colored urgency for outstanding invoices, plain date once paid. */
+export function DueLabel({ dueDate, status }: { dueDate: string; status: string }) {
+  if (status === "paid") return <span className="text-muted">Due {dueDate}</span>;
+  const { label, tone } = relativeDue(dueDate);
+  const cls =
+    tone === "danger"
+      ? "font-medium text-red-600 dark:text-red-400"
+      : tone === "warning"
+        ? "font-medium text-amber-700 dark:text-amber-300"
+        : "text-muted";
+  return (
+    <span>
+      <span className={cls}>{label}</span>
+      <span className="text-muted"> · {dueDate}</span>
+    </span>
+  );
+}

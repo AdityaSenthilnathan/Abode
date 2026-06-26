@@ -5,10 +5,13 @@ import { ChatThread } from "@/components/chat/chat-thread";
 
 export default async function Thread({
   params,
+  searchParams,
 }: {
   params: Promise<{ conversationId: string }>;
+  searchParams: Promise<{ draft?: string }>;
 }) {
   const { conversationId } = await params;
+  const { draft } = await searchParams;
   const user = await requireUser();
   // Independent reads on separate pooled connections — fetch concurrently.
   const [thread, job] = await Promise.all([
@@ -25,6 +28,7 @@ export default async function Thread({
         title={thread.otherName}
         role={user.role}
         conversationType={thread.conversation.type}
+        initialDraft={draft}
         job={job}
         messages={thread.messages.map((m) => ({
           id: m.id,

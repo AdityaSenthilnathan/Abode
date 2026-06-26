@@ -59,6 +59,19 @@ export function authLog(...args: unknown[]): void {
   }
 }
 
+/**
+ * Simulated payments. When Stripe isn't wired up, fall back to a fully simulated
+ * card-entry + pay flow so the Dues page is demoable end-to-end (type a card, see
+ * it saved, "pay" an invoice — only the non-sensitive brand/last4/expiry are
+ * kept). Same production posture as demoLogin(): on for the live demo via
+ * ALLOW_DEMO_LOGIN and always on in local dev — but it flips OFF automatically
+ * the moment real Stripe keys exist, so it can never stand in for a real charge.
+ */
+export function simulatePayments(): boolean {
+  const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
+  return !stripeConfigured && demoLogin();
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   appUrl: opt("APP_URL") ?? "http://localhost:3000",

@@ -54,6 +54,8 @@ export const users = pgTable("users", {
   fullName: text(),
   avatarUrl: text(),
   stripeCustomerId: text(),
+  autopayEnabled: boolean().notNull().default(false),
+  autopayLeadDays: integer().notNull().default(0),
   createdAt: createdAt(),
 });
 

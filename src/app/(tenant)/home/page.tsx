@@ -6,7 +6,17 @@ import { withUser } from "@/server/db/rls";
 import { units, invoices, maintenanceRequests, notifications } from "@db/schema";
 import { formatCents } from "@/lib/utils";
 import { NotConnected } from "@/components/not-connected";
-import { Badge, Card, EmptyState, SectionHeader, button, invoiceTone, requestTone } from "@/components/ui";
+import {
+  Badge,
+  Card,
+  DueLabel,
+  EmptyState,
+  SectionHeader,
+  button,
+  byInvoiceUrgency,
+  invoiceTone,
+  requestTone,
+} from "@/components/ui";
 
 async function loadHome(userId: string) {
   // RLS scopes every query to this tenant's own unit / invoices / requests / notifications.
@@ -43,10 +53,11 @@ export default async function TenantHome() {
   }
 
   const firstName = (user.fullName ?? "").split(" ")[0] || "there";
-  const payable = data.invoices.filter((i) => i.status === "unpaid" || i.status === "late");
-  const balanceCents = payable.reduce((sum, i) => sum + i.amountCents, 0);
+  const outstanding = data.invoices.filter((i) => i.status !== "paid");
+  const balanceCents = outstanding.reduce((sum, i) => sum + i.amountCents, 0);
   const openRequests = data.requests.filter((r) => r.status !== "done");
   const recentRequests = data.requests.slice(0, 4);
+  const recentInvoices = data.invoices.slice().sort(byInvoiceUrgency).slice(0, 4);
 
   const stats = [
     {
@@ -54,8 +65,8 @@ export default async function TenantHome() {
       icon: CreditCard,
       label: "Balance due",
       value: formatCents(balanceCents),
-      hint: payable.length ? `${payable.length} to pay` : "All caught up",
-      alert: payable.length > 0,
+      hint: outstanding.length ? `${outstanding.length} to pay` : "All caught up",
+      alert: outstanding.length > 0,
     },
     {
       href: "/requests",
@@ -120,6 +131,39 @@ export default async function TenantHome() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* dues */}
+        <section className="space-y-3">
+          <SectionHeader
+            title="Dues"
+            icon={CreditCard}
+            action={
+              <Link href="/dues" className={button.ghost}>
+                {outstanding.length > 0 ? "Pay dues" : "View all"}
+              </Link>
+            }
+          />
+          {recentInvoices.length > 0 ? (
+            <Card className="divide-y divide-line overflow-hidden">
+              {recentInvoices.map((inv) => (
+                <div key={inv.id} className="flex items-center justify-between gap-4 p-4">
+                  <div>
+                    <div className="font-medium capitalize">{inv.type}</div>
+                    <div className="mt-0.5 text-xs">
+                      <DueLabel dueDate={inv.dueDate} status={inv.status} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold">{formatCents(inv.amountCents)}</span>
+                    <Badge tone={invoiceTone(inv.status)}>{inv.status}</Badge>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          ) : (
+            <EmptyState icon={CreditCard} title="You're all caught up" hint="No dues right now." />
+          )}
+        </section>
+
         {/* maintenance */}
         <section className="space-y-3">
           <SectionHeader
@@ -161,39 +205,6 @@ export default async function TenantHome() {
                 </Link>
               }
             />
-          )}
-        </section>
-
-        {/* dues */}
-        <section className="space-y-3">
-          <SectionHeader
-            title="Dues"
-            icon={CreditCard}
-            action={
-              payable.length > 0 ? (
-                <Link href="/dues" className={button.ghost}>
-                  Pay dues
-                </Link>
-              ) : undefined
-            }
-          />
-          {data.invoices.length > 0 ? (
-            <Card className="divide-y divide-line overflow-hidden">
-              {data.invoices.map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between gap-4 p-4">
-                  <div>
-                    <div className="font-medium capitalize">{inv.type}</div>
-                    <div className="mt-0.5 text-xs text-muted">Due {inv.dueDate}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold">{formatCents(inv.amountCents)}</span>
-                    <Badge tone={invoiceTone(inv.status)}>{inv.status}</Badge>
-                  </div>
-                </div>
-              ))}
-            </Card>
-          ) : (
-            <EmptyState icon={CreditCard} title="You're all caught up" hint="No dues right now." />
           )}
         </section>
       </div>

@@ -3,7 +3,7 @@ import { ChevronRight, Paperclip, Plus, Wrench } from "lucide-react";
 import { assertRole } from "@/server/auth/guard";
 import { listMyRequests } from "@/server/services/requests";
 import { NotConnected } from "@/components/not-connected";
-import { Badge, Card, EmptyState, button, requestTone } from "@/components/ui";
+import { Badge, Card, EmptyState, SectionHeader, button, requestTone } from "@/components/ui";
 import { AutoRefresh } from "@/components/auto-refresh";
 
 const URGENCY: Record<string, string> = {
@@ -12,6 +12,34 @@ const URGENCY: Record<string, string> = {
   high: "text-orange-600 dark:text-orange-400",
   urgent: "font-medium text-red-600 dark:text-red-400",
 };
+
+type RequestItem = Awaited<ReturnType<typeof listMyRequests>>[number];
+
+function RequestRow({ r }: { r: RequestItem }) {
+  return (
+    <Link
+      href={`/requests/${r.id}`}
+      className="flex items-center justify-between gap-4 p-4 transition hover:bg-surface-2"
+    >
+      <div className="min-w-0">
+        <div className="truncate font-medium">{r.description}</div>
+        <div className="mt-1 flex items-center gap-3 text-xs">
+          <span className={`capitalize ${URGENCY[r.urgency]}`}>{r.urgency} priority</span>
+          {r.mediaUrls.length > 0 && (
+            <span className="flex items-center gap-1 text-muted">
+              <Paperclip className="h-3 w-3" />
+              {r.mediaUrls.length}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Badge tone={requestTone(r.status)}>{r.status}</Badge>
+        <ChevronRight className="h-4 w-4 text-muted" />
+      </div>
+    </Link>
+  );
+}
 
 export default async function RequestsPage() {
   const user = await assertRole("tenant");
@@ -22,6 +50,9 @@ export default async function RequestsPage() {
   } catch {
     dbReady = false;
   }
+
+  const active = rows.filter((r) => r.status !== "done");
+  const completed = rows.filter((r) => r.status === "done");
 
   return (
     <div className="space-y-6">
@@ -50,32 +81,28 @@ export default async function RequestsPage() {
           }
         />
       ) : (
-        <Card className="divide-y divide-line overflow-hidden">
-          {rows.map((r) => (
-            <Link
-              key={r.id}
-              href={`/requests/${r.id}`}
-              className="flex items-center justify-between gap-4 p-4 transition hover:bg-surface-2"
-            >
-              <div className="min-w-0">
-                <div className="truncate font-medium">{r.description}</div>
-                <div className="mt-1 flex items-center gap-3 text-xs">
-                  <span className={`capitalize ${URGENCY[r.urgency]}`}>{r.urgency} priority</span>
-                  {r.mediaUrls.length > 0 && (
-                    <span className="flex items-center gap-1 text-muted">
-                      <Paperclip className="h-3 w-3" />
-                      {r.mediaUrls.length}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge tone={requestTone(r.status)}>{r.status}</Badge>
-                <ChevronRight className="h-4 w-4 text-muted" />
-              </div>
-            </Link>
-          ))}
-        </Card>
+        <div className="space-y-8">
+          {active.length > 0 && (
+            <section className="space-y-3">
+              <SectionHeader title={`Active (${active.length})`} />
+              <Card className="divide-y divide-line overflow-hidden">
+                {active.map((r) => (
+                  <RequestRow key={r.id} r={r} />
+                ))}
+              </Card>
+            </section>
+          )}
+          {completed.length > 0 && (
+            <section className="space-y-3">
+              <SectionHeader title={`Completed (${completed.length})`} />
+              <Card className="divide-y divide-line overflow-hidden">
+                {completed.map((r) => (
+                  <RequestRow key={r.id} r={r} />
+                ))}
+              </Card>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );
