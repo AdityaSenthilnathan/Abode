@@ -1,9 +1,10 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
 import { invoices, properties, propertyEmployees, tasks, units, users } from "@db/schema";
 import { getPayoutCard, type PayoutCard } from "./earnings";
 import { listEmployeeProperties } from "./onboarding";
+import { ownerStats } from "./owner";
 
 export interface TenantContact {
   id: string;
@@ -163,4 +164,119 @@ export async function getHandymanAccount(userId: string): Promise<HandymanAccoun
     stats: { activeJobs, completedJobs, totalEarnedCents },
     payout,
   };
+}
+
+export interface OwnerAccountProperty {
+  id: string;
+  name: string;
+  address: string | null;
+  unitCount: number;
+  occupiedCount: number;
+}
+
+export interface OwnerTeamMember extends AccountContact {
+  /** Total jobs this worker has handled across the owner's properties. */
+  jobCount: number;
+}
+
+export interface OwnerAccount {
+  portfolio: {
+    properties: OwnerAccountProperty[];
+    propertyCount: number;
+    unitCount: number;
+    occupiedCount: number;
+    vacantCount: number;
+    tenantCount: number;
+  };
+  /** Headline business metrics, shared with the dashboard (RLS-scoped to the owner). */
+  stats: Awaited<ReturnType<typeof ownerStats>>;
+  /** Maintenance staff working across the owner's properties (one row per worker). */
+  team: OwnerTeamMember[];
+}
+
+/**
+ * Everything an owner / property manager sees on their account page: their
+ * portfolio (properties + unit occupancy), the same headline business metrics
+ * as the dashboard, and the maintenance team working across their properties.
+ *
+ * The portfolio + stats read as the owner (RLS → only their own properties,
+ * units, invoices, tasks). The team directory then runs via asAdmin — owners
+ * can't read other `users` rows under RLS — but it's scoped to the property IDs
+ * RLS already confirmed belong to this owner, the same pattern getTenantAccount
+ * uses for its manager + maintenance lookup.
+ */
+export async function getOwnerAccount(ownerId: string): Promise<OwnerAccount> {
+  const [portfolio, stats] = await Promise.all([
+    withUser(ownerId, async (tx) => {
+      const props = await tx
+        .select({ id: properties.id, name: properties.name, address: properties.address })
+        .from(properties)
+        .orderBy(properties.name); // RLS → only this owner's properties
+      const unitRows = await tx
+        .select({ propertyId: units.propertyId, status: units.status, tenantId: units.tenantId })
+        .from(units);
+
+      const tenantIds = new Set<string>();
+      const byProp = new Map<string, { unitCount: number; occupiedCount: number }>();
+      for (const u of unitRows) {
+        const agg = byProp.get(u.propertyId) ?? { unitCount: 0, occupiedCount: 0 };
+        agg.unitCount += 1;
+        if (u.status === "occupied") agg.occupiedCount += 1;
+        byProp.set(u.propertyId, agg);
+        if (u.tenantId) tenantIds.add(u.tenantId);
+      }
+
+      const list: OwnerAccountProperty[] = props.map((p) => ({
+        id: p.id,
+        name: p.name,
+        address: p.address,
+        unitCount: byProp.get(p.id)?.unitCount ?? 0,
+        occupiedCount: byProp.get(p.id)?.occupiedCount ?? 0,
+      }));
+      const unitCount = unitRows.length;
+      const occupiedCount = unitRows.filter((u) => u.status === "occupied").length;
+
+      return {
+        ids: props.map((p) => p.id),
+        portfolio: {
+          properties: list,
+          propertyCount: props.length,
+          unitCount,
+          occupiedCount,
+          vacantCount: unitCount - occupiedCount,
+          tenantCount: tenantIds.size,
+        },
+      };
+    }),
+    ownerStats(ownerId),
+  ]);
+
+  // Team directory — scoped to the property IDs RLS confirmed are this owner's.
+  const team = portfolio.ids.length
+    ? await asAdmin(async (tx) => {
+        const rows = await tx
+          .select({
+            id: users.id,
+            fullName: users.fullName,
+            email: users.email,
+            jobCount: propertyEmployees.jobCount,
+          })
+          .from(propertyEmployees)
+          .innerJoin(users, eq(users.id, propertyEmployees.employeeId))
+          .where(inArray(propertyEmployees.propertyId, portfolio.ids))
+          .orderBy(desc(propertyEmployees.jobCount));
+
+        // A worker can be linked to several of the owner's properties — collapse
+        // to one row per worker, summing the jobs they've done across them.
+        const byWorker = new Map<string, OwnerTeamMember>();
+        for (const r of rows) {
+          const existing = byWorker.get(r.id);
+          if (existing) existing.jobCount += r.jobCount;
+          else byWorker.set(r.id, { fullName: r.fullName, email: r.email, jobCount: r.jobCount });
+        }
+        return [...byWorker.values()].sort((a, b) => b.jobCount - a.jobCount);
+      })
+    : [];
+
+  return { portfolio: portfolio.portfolio, stats, team };
 }

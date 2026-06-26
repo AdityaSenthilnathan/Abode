@@ -32,9 +32,11 @@ function AccountChip({ user }: { user: SessionUser }) {
     </>
   );
   const cls = "flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-1 sm:pr-3";
-  // Tenants and handymen each have an account page; the chip is its entry point.
+  // Every role has an account page; the chip is its entry point. Each role group
+  // owns a distinct path (route groups don't change the URL, so they can't share
+  // one): tenant → /settings, handyman → /account, owner → /profile.
   const accountHref =
-    user.role === "tenant" ? "/settings" : user.role === "employee" ? "/account" : null;
+    user.role === "tenant" ? "/settings" : user.role === "employee" ? "/account" : "/profile";
   if (accountHref) {
     return (
       <Link href={accountHref} title="Account settings" className={`${cls} transition hover:bg-surface-2`}>
