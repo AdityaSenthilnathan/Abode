@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, CheckCheck, SendHorizontal } from "lucide-react";
 import { sendMessageAction } from "@/actions/messaging";
 import type { ConversationJob } from "@/server/services/messaging";
+import { useAbodeEvents } from "../realtime/events-provider";
 import { JobActionBar } from "./job-action-bar";
 
 export interface ChatMessage {
@@ -55,6 +56,14 @@ export function ChatThread({
   const [body, setBody] = useState(initialDraft ?? "");
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const events = useAbodeEvents();
+  const live = events?.live ?? false;
+  // Current job's taskId in a ref so the event subscription doesn't re-bind on
+  // every workflow step — job events are filtered against this.
+  const jobTaskId = useRef<string | null>(initialJob?.taskId ?? null);
+  useEffect(() => {
+    jobTaskId.current = job?.taskId ?? null;
+  }, [job]);
 
   // Prefill from a ?draft= deep link (e.g. "Request to pay later" on Dues):
   // focus the composer with the cursor at the end, then strip the param so a
@@ -74,30 +83,45 @@ export function ChatThread({
   useEffect(() => setMsgs(messages), [messages]);
   useEffect(() => setJob(initialJob), [initialJob]);
 
-  // Light polling for incoming messages *and* live job-workflow state, so the
-  // owner's Approve/Accept buttons surface within ~3s of the handyman acting —
-  // no reload needed. AppSync Events is the production upgrade.
-  useEffect(() => {
-    let alive = true;
-    const id = setInterval(async () => {
-      try {
-        const r = await fetch(`/api/conversations/${conversationId}/messages`);
-        if (r.ok) {
-          const j = (await r.json()) as { messages: ChatMessage[]; job: ConversationJob | null };
-          if (alive) {
-            setMsgs(j.messages);
-            setJob(j.job);
-          }
-        }
-      } catch {
-        /* ignore */
+  // Pull fresh messages *and* live job-workflow state from the (RLS-guarded)
+  // endpoint. The SSE payload only signals that something changed.
+  const refetch = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/conversations/${conversationId}/messages`);
+      if (r.ok) {
+        const j = (await r.json()) as { messages: ChatMessage[]; job: ConversationJob | null };
+        setMsgs(j.messages);
+        setJob(j.job);
       }
-    }, 3000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
+    } catch {
+      /* ignore */
+    }
   }, [conversationId]);
+
+  // Realtime: refetch the instant a message lands in THIS conversation or this
+  // job advances — so the owner's Approve/Accept buttons surface in <1s with no
+  // reload. (Replaces the old 3s poll; AppSync Events was the prior "someday".)
+  useEffect(() => {
+    if (!events) return;
+    const onMessage = (d: Record<string, unknown> | null) => {
+      if (d?.conversationId === conversationId) refetch();
+    };
+    const onJob = (d: Record<string, unknown> | null) => {
+      if (d?.taskId && d.taskId === jobTaskId.current) refetch();
+    };
+    const offMessage = events.on("message", onMessage);
+    const offJob = events.on("job", onJob);
+    return () => {
+      offMessage();
+      offJob();
+    };
+  }, [events, conversationId, refetch]);
+
+  // Safety net: slow when SSE is live (30s), original 3s cadence when it isn't.
+  useEffect(() => {
+    const id = setInterval(refetch, live ? 30000 : 3000);
+    return () => clearInterval(id);
+  }, [live, refetch]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView();

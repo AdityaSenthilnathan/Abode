@@ -2,6 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { asAdmin } from "@/server/db/rls";
+import { emitEvent } from "@/server/realtime/emit";
 import { invoices, notifications, paymentMethods, payments, units } from "@db/schema";
 import { getStripe } from "./stripe";
 
@@ -93,6 +94,7 @@ async function notifyFailure(pi: Stripe.PaymentIntent) {
         entityType: "invoice",
         entityId: invoiceId,
       });
+      await emitEvent(tx, { topic: "notification", recipients: [row.tenantId], entityType: "invoice", entityId: invoiceId });
     }
   });
 }

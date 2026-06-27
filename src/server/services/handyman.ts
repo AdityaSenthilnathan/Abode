@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { asAdmin, withUser, type DbTx } from "@/server/db/rls";
+import { emitEvent } from "@/server/realtime/emit";
 import {
   maintenanceRequests,
   notifications,
@@ -218,6 +219,10 @@ async function notifyOwner(tx: DbTx, propertyId: string, title: string, body: st
       entityType: "task",
       entityId: taskId,
     });
+    // Push both: the bell badge (notification) and the in-chat job-workflow bar
+    // (job), so the owner's Approve/Accept buttons surface in <1s, no reload.
+    await emitEvent(tx, { topic: "notification", recipients: [prop.ownerId], entityType: "task", entityId: taskId });
+    await emitEvent(tx, { topic: "job", recipients: [prop.ownerId], taskId });
   }
 }
 

@@ -5,6 +5,7 @@ import type { SessionUser } from "@/server/auth/session";
 import { logoutAction } from "@/actions/auth";
 import { NavLinks } from "./nav-links";
 import { NotificationBell } from "./notification-bell";
+import { EventsProvider } from "./realtime/events-provider";
 import { ThemeToggle } from "./theme-toggle";
 
 export interface NavItem {
@@ -58,6 +59,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
+    <EventsProvider>
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 border-b border-line bg-surface/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4">
@@ -93,5 +95,6 @@ export function AppShell({
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-10">{children}</main>
     </div>
+    </EventsProvider>
   );
 }

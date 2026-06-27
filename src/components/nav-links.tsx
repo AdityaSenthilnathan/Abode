@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { NavItem } from "./app-shell";
+import { useAbodeEvents } from "./realtime/events-provider";
 
 /** Icon per nav route, shared across all role shells. */
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
@@ -42,31 +43,37 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const hasMessages = items.some((n) => n.href === "/messages");
   const [unreadMsgs, setUnreadMsgs] = useState(0);
+  const events = useAbodeEvents();
+  const live = events?.live ?? false;
 
   // Global unread-messages count, so new messages surface on any screen — not
-  // just inside an open thread. Re-polls on navigation (e.g. right after you
-  // open a thread, which clears its unread) and every 10s otherwise.
+  // just inside an open thread. Refetches instantly on a realtime "message"
+  // event; the interval is a slow safety net (60s) when SSE is live, or the
+  // original 10s polling when it isn't. Also re-polls on navigation (e.g. right
+  // after you open a thread, which clears its unread).
+  const poll = useCallback(async () => {
+    try {
+      const r = await fetch("/api/messages/unread");
+      if (r.ok) {
+        const j = (await r.json()) as { count?: number };
+        setUnreadMsgs(j.count ?? 0);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     if (!hasMessages) return;
-    let alive = true;
-    const poll = async () => {
-      try {
-        const r = await fetch("/api/messages/unread");
-        if (r.ok) {
-          const j = (await r.json()) as { count?: number };
-          if (alive) setUnreadMsgs(j.count ?? 0);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
+    return events?.on("message", poll);
+  }, [hasMessages, events, poll]);
+
+  useEffect(() => {
+    if (!hasMessages) return;
     poll();
-    const id = setInterval(poll, 10000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [hasMessages, pathname]);
+    const id = setInterval(poll, live ? 60000 : 10000);
+    return () => clearInterval(id);
+  }, [hasMessages, pathname, live, poll]);
 
   return (
     <nav className="flex items-center gap-1 text-sm">

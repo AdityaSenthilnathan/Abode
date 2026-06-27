@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
+import { emitEvent } from "@/server/realtime/emit";
 import { notifications } from "@db/schema";
 
 export type NotifType = "urgent" | "success" | "info";
@@ -26,7 +27,9 @@ export async function unreadCount(userId: string): Promise<number> {
   });
 }
 
-/** Insert a notification for a recipient (trusted/system path). M5 adds realtime push. */
+/** Insert a notification for a recipient (trusted/system path) and push it live
+ *  over the realtime channel, so any caller of this helper is realtime by
+ *  construction. */
 export async function notify(opts: {
   recipientId: string;
   type: NotifType;
@@ -35,14 +38,20 @@ export async function notify(opts: {
   entityType?: string;
   entityId?: string;
 }) {
-  return asAdmin((tx) =>
-    tx.insert(notifications).values({
+  return asAdmin(async (tx) => {
+    await tx.insert(notifications).values({
       recipientId: opts.recipientId,
       type: opts.type,
       title: opts.title,
       body: opts.body ?? null,
       entityType: opts.entityType ?? null,
       entityId: opts.entityId ?? null,
-    }),
-  );
+    });
+    await emitEvent(tx, {
+      topic: "notification",
+      recipients: [opts.recipientId],
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+    });
+  });
 }

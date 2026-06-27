@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
+import { emitEvent } from "@/server/realtime/emit";
 import { conversations, maintenanceRequests, messages, properties, propertyEmployees, taskReceipts, tasks, units, users } from "@db/schema";
 import type { Task } from "@db/schema";
 
@@ -216,9 +217,21 @@ export async function getConversationJob(userId: string, conversationId: string)
 }
 
 export async function sendMessage(userId: string, conversationId: string, body: string) {
-  return withUser(userId, (tx) =>
-    tx.insert(messages).values({ conversationId, senderId: userId, body }).returning(),
-  );
+  return withUser(userId, async (tx) => {
+    // RLS lets a participant read their own conversation row, so we can resolve
+    // the other party for a realtime "message" signal without asAdmin.
+    const [c] = await tx
+      .select({ a: conversations.participantA, b: conversations.participantB, taskId: conversations.taskId })
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    const rows = await tx.insert(messages).values({ conversationId, senderId: userId, body }).returning();
+    if (c) {
+      const recipient = c.a === userId ? c.b : c.a;
+      await emitEvent(tx, { topic: "message", recipients: [recipient], conversationId, taskId: c.taskId ?? null });
+    }
+    return rows;
+  });
 }
 
 /**
@@ -417,9 +430,23 @@ export async function ensureJobConversations(
 export async function messageManagerForTask(handymanId: string, taskId: string, body: string): Promise<void> {
   const { ownerConversationId } = await ensureJobConversations(handymanId, taskId);
   if (!ownerConversationId) return;
-  await withUser(handymanId, (tx) =>
-    tx.insert(messages).values({ conversationId: ownerConversationId, senderId: handymanId, body }),
-  );
+  await withUser(handymanId, async (tx) => {
+    const [c] = await tx
+      .select({ a: conversations.participantA, b: conversations.participantB, taskId: conversations.taskId })
+      .from(conversations)
+      .where(eq(conversations.id, ownerConversationId))
+      .limit(1);
+    await tx.insert(messages).values({ conversationId: ownerConversationId, senderId: handymanId, body });
+    if (c) {
+      const recipient = c.a === handymanId ? c.b : c.a;
+      await emitEvent(tx, {
+        topic: "message",
+        recipients: [recipient],
+        conversationId: ownerConversationId,
+        taskId: c.taskId ?? null,
+      });
+    }
+  });
 }
 
 /**

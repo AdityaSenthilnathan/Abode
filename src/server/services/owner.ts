@@ -1,6 +1,7 @@
 import "server-only";
 import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
+import { emitEvent } from "@/server/realtime/emit";
 import {
   conversations,
   invoices,
@@ -151,6 +152,12 @@ export async function assignTask(
           entityType: "request",
           entityId: opts.requestId,
         });
+        await emitEvent(tx, {
+          topic: "notification",
+          recipients: [req.submittedBy],
+          entityType: "request",
+          entityId: opts.requestId,
+        });
       }
     }
     await tx
@@ -191,6 +198,8 @@ export async function assignTask(
       entityType: "task",
       entityId: task.id,
     });
+    await emitEvent(tx, { topic: "notification", recipients: [opts.assignedTo], entityType: "task", entityId: task.id });
+    await emitEvent(tx, { topic: "job", recipients: [opts.assignedTo], taskId: task.id });
     return task;
   });
 }
@@ -265,6 +274,8 @@ export function approveEstimate(ownerId: string, taskId: string) {
         entityType: "task",
         entityId: taskId,
       });
+      await emitEvent(tx, { topic: "notification", recipients: [row.task.assignedTo], entityType: "task", entityId: taskId });
+      await emitEvent(tx, { topic: "job", recipients: [row.task.assignedTo], taskId });
     }
   });
 }
@@ -296,6 +307,12 @@ export function acceptCompletion(ownerId: string, taskId: string) {
           entityType: "request",
           entityId: row.task.requestId,
         });
+        await emitEvent(tx, {
+          topic: "notification",
+          recipients: [req.submittedBy],
+          entityType: "request",
+          entityId: row.task.requestId,
+        });
       }
     }
     if (row.task.assignedTo) {
@@ -307,6 +324,8 @@ export function acceptCompletion(ownerId: string, taskId: string) {
         entityType: "task",
         entityId: taskId,
       });
+      await emitEvent(tx, { topic: "notification", recipients: [row.task.assignedTo], entityType: "task", entityId: taskId });
+      await emitEvent(tx, { topic: "job", recipients: [row.task.assignedTo], taskId });
     }
   });
 }

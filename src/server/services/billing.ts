@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { asAdmin, withUser, type DbTx } from "@/server/db/rls";
+import { emitEvent } from "@/server/realtime/emit";
 import { invoices, notifications, paymentMethods, payments, properties, units, users } from "@db/schema";
 
 const PAYABLE = ["unpaid", "late", "deferred"] as const;
@@ -297,5 +298,6 @@ export async function requestPayLater(userId: string, invoiceId: string) {
       entityType: "invoice",
       entityId: invoiceId,
     });
+    await emitEvent(tx, { topic: "notification", recipients: [row.ownerId], entityType: "invoice", entityId: invoiceId });
   });
 }

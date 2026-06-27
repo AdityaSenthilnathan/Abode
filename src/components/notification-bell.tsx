@@ -1,35 +1,41 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
+import { useAbodeEvents } from "./realtime/events-provider";
 
-/** Polls the unread count every 15s and links to the notifications page. */
+/**
+ * Unread-count badge. Refetches instantly on a realtime "notification" event;
+ * the interval is just a slow safety net (60s) while the SSE stream is live, or
+ * the original 15s cadence when it isn't (graceful polling fallback).
+ */
 export function NotificationBell() {
   const [count, setCount] = useState(0);
   const pathname = usePathname();
   const active = pathname === "/notifications";
+  const events = useAbodeEvents();
+  const live = events?.live ?? false;
+
+  const poll = useCallback(async () => {
+    try {
+      const r = await fetch("/api/notifications/unread");
+      if (r.ok) {
+        const j = (await r.json()) as { count?: number };
+        setCount(j.count ?? 0);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => events?.on("notification", poll), [events, poll]);
 
   useEffect(() => {
-    let alive = true;
-    const poll = async () => {
-      try {
-        const r = await fetch("/api/notifications/unread");
-        if (r.ok) {
-          const j = (await r.json()) as { count?: number };
-          if (alive) setCount(j.count ?? 0);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
     poll();
-    const id = setInterval(poll, 15000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [pathname]);
+    const id = setInterval(poll, live ? 60000 : 15000);
+    return () => clearInterval(id);
+  }, [pathname, live, poll]);
 
   return (
     <Link
