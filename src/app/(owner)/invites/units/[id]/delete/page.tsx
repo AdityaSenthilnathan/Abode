@@ -46,7 +46,7 @@ export default async function DeleteUnitPage({ params }: { params: Promise<{ id:
           </button>
         </form>
         <Link
-          href="/invites"
+          href="/properties"
           className="rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
         >
           Cancel

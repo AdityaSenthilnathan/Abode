@@ -3,9 +3,11 @@ import { AlertTriangle, Bell, Check, CheckCircle2, Info } from "lucide-react";
 import { requireUser } from "@/server/auth/guard";
 import type { Role } from "@/server/auth/session";
 import { listNotifications } from "@/server/services/notifications";
+import { ownerNotifications, ownerPropertyOptions } from "@/server/services/owner";
 import { markReadAction } from "@/actions/owner";
 import { NotConnected } from "@/components/not-connected";
 import { Card, EmptyState, type Tone } from "@/components/ui";
+import { OwnerNotifications } from "./owner-notifications";
 
 type Notif = Awaited<ReturnType<typeof listNotifications>>[number];
 
@@ -82,6 +84,38 @@ function Row({ n, href }: { n: Notif; href: string | null }) {
 
 export default async function NotificationsPage() {
   const user = await requireUser();
+
+  // Owners get the property-filterable view; their notifications are tagged with
+  // the property (and unit) each one concerns.
+  if (user.role === "owner") {
+    let ownerNotifs: Awaited<ReturnType<typeof ownerNotifications>> = [];
+    let ownerProps: Awaited<ReturnType<typeof ownerPropertyOptions>> = [];
+    let ownerDbReady = true;
+    try {
+      [ownerNotifs, ownerProps] = await Promise.all([
+        ownerNotifications(user.id),
+        ownerPropertyOptions(user.id),
+      ]);
+    } catch {
+      ownerDbReady = false;
+    }
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Notifications</h1>
+          <p className="mt-1 text-sm text-muted">Updates across your properties — filter by building below.</p>
+        </div>
+        {!ownerDbReady ? (
+          <NotConnected />
+        ) : ownerNotifs.length === 0 ? (
+          <EmptyState icon={Bell} title="You're all caught up" hint="New updates will show up here." />
+        ) : (
+          <OwnerNotifications notifs={ownerNotifs} properties={ownerProps} />
+        )}
+      </div>
+    );
+  }
+
   let all: Notif[] = [];
   let dbReady = true;
   try {

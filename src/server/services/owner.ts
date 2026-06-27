@@ -66,18 +66,227 @@ export async function ownerStats(ownerId: string) {
       .from(invoices);
     const [tk] = await tx
       .select({
-        openFixes: sql<number>`count(*) filter (where ${tasks.status} <> 'done')`,
         expenses: sql<number>`coalesce(sum(${tasks.finalCostCents}) filter (where ${tasks.status} = 'done'), 0)`,
       })
       .from(tasks);
+    // "Open fixes" = unresolved maintenance requests (received or in-progress),
+    // matching the per-property "open fixes" the dashboard cards and map show —
+    // not the task count, which would disagree with them.
+    const [mr] = await tx
+      .select({ openFixes: count() })
+      .from(maintenanceRequests)
+      .where(ne(maintenanceRequests.status, "done"));
     const [emp] = await tx.select({ n: count() }).from(propertyEmployees);
     return {
       revenueCents: Number(inv?.revenue ?? 0),
       unpaidCount: Number(inv?.unpaid ?? 0),
-      openFixes: Number(tk?.openFixes ?? 0),
+      openFixes: Number(mr?.openFixes ?? 0),
       expensesCents: Number(tk?.expenses ?? 0),
       employeeCount: Number(emp?.n ?? 0),
     };
+  });
+}
+
+export type PortfolioUnit = {
+  id: string;
+  unitNumber: string;
+  rentAmountCents: number | null;
+  status: string;
+  tenantName: string | null;
+  openRequests: number;
+  unpaidCount: number;
+};
+
+export type PortfolioProperty = {
+  id: string;
+  name: string;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  units: PortfolioUnit[];
+  occupied: number;
+  vacant: number;
+  monthlyRentCents: number;
+  openRequests: number;
+  unpaidCount: number;
+};
+
+/** The owner's whole portfolio: properties → their units, each enriched with the
+ *  tenant, open-fix count, and unpaid-invoice count, plus per-property rollups +
+ *  map coordinates. Powers the dashboard and the Properties page. RLS-scoped. */
+export async function ownerPortfolio(ownerId: string): Promise<PortfolioProperty[]> {
+  return withUser(ownerId, async (tx) => {
+    const props = await tx.select().from(properties).orderBy(properties.name);
+    if (props.length === 0) return [];
+
+    const us = await tx.select().from(units);
+    const tenantIds = [...new Set(us.map((u) => u.tenantId).filter((id): id is string => !!id))];
+    const unitIds = us.map((u) => u.id);
+
+    // One batched query each for tenant names, open fixes, and unpaid invoices —
+    // same N+1-avoidance as ownerGrid, joined up per property below.
+    const tenantRows = tenantIds.length
+      ? await tx
+          .select({ id: users.id, fullName: users.fullName, email: users.email })
+          .from(users)
+          .where(inArray(users.id, tenantIds))
+      : [];
+    const openRows = unitIds.length
+      ? await tx
+          .select({ unitId: maintenanceRequests.unitId, n: count() })
+          .from(maintenanceRequests)
+          .where(and(inArray(maintenanceRequests.unitId, unitIds), ne(maintenanceRequests.status, "done")))
+          .groupBy(maintenanceRequests.unitId)
+      : [];
+    const unpaidRows = unitIds.length
+      ? await tx
+          .select({ unitId: invoices.unitId, n: count() })
+          .from(invoices)
+          .where(and(inArray(invoices.unitId, unitIds), inArray(invoices.status, ["unpaid", "late"])))
+          .groupBy(invoices.unitId)
+      : [];
+
+    const nameById = new Map(tenantRows.map((t) => [t.id, t.fullName ?? t.email ?? null] as const));
+    const openById = new Map(openRows.map((o) => [o.unitId, Number(o.n)] as const));
+    const unpaidById = new Map(unpaidRows.map((o) => [o.unitId, Number(o.n)] as const));
+
+    const byProp = new Map<string, PortfolioUnit[]>();
+    for (const u of us) {
+      const list = byProp.get(u.propertyId) ?? [];
+      list.push({
+        id: u.id,
+        unitNumber: u.unitNumber,
+        rentAmountCents: u.rentAmountCents,
+        status: u.status,
+        tenantName: u.tenantId ? nameById.get(u.tenantId) ?? null : null,
+        openRequests: openById.get(u.id) ?? 0,
+        unpaidCount: unpaidById.get(u.id) ?? 0,
+      });
+      byProp.set(u.propertyId, list);
+    }
+
+    return props.map((p) => {
+      const unitList = (byProp.get(p.id) ?? []).sort((a, b) =>
+        a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true }),
+      );
+      const occupied = unitList.filter((u) => u.status === "occupied").length;
+      return {
+        id: p.id,
+        name: p.name,
+        address: p.address,
+        lat: p.lat != null ? Number(p.lat) : null,
+        lng: p.lng != null ? Number(p.lng) : null,
+        units: unitList,
+        occupied,
+        vacant: unitList.length - occupied,
+        monthlyRentCents: unitList.reduce(
+          (s, u) => s + (u.status === "occupied" ? u.rentAmountCents ?? 0 : 0),
+          0,
+        ),
+        openRequests: unitList.reduce((s, u) => s + u.openRequests, 0),
+        unpaidCount: unitList.reduce((s, u) => s + u.unpaidCount, 0),
+      };
+    });
+  });
+}
+
+export type OwnerNotification = typeof notifications.$inferSelect & {
+  propertyId: string | null;
+  propertyName: string | null;
+  unitNumber: string | null;
+};
+
+/** The owner's notifications, each tagged with the property (and unit, for
+ *  request notifications) it concerns — so the Notifications page can filter by
+ *  property. RLS-scoped: only entities on the owner's properties resolve. */
+export async function ownerNotifications(ownerId: string): Promise<OwnerNotification[]> {
+  return withUser(ownerId, async (tx) => {
+    const notifs = await tx.select().from(notifications).orderBy(desc(notifications.createdAt));
+
+    const taskRows = await tx
+      .select({ id: tasks.id, propertyId: properties.id, propertyName: properties.name })
+      .from(tasks)
+      .innerJoin(properties, eq(properties.id, tasks.propertyId));
+    const reqRows = await tx
+      .select({
+        id: maintenanceRequests.id,
+        unitNumber: units.unitNumber,
+        propertyId: properties.id,
+        propertyName: properties.name,
+      })
+      .from(maintenanceRequests)
+      .innerJoin(units, eq(units.id, maintenanceRequests.unitId))
+      .innerJoin(properties, eq(properties.id, units.propertyId));
+
+    const taskMap = new Map(taskRows.map((t) => [t.id, t] as const));
+    const reqMap = new Map(reqRows.map((r) => [r.id, r] as const));
+
+    return notifs.map((n) => {
+      let propertyId: string | null = null;
+      let propertyName: string | null = null;
+      let unitNumber: string | null = null;
+      if (n.entityType === "task" && n.entityId) {
+        const t = taskMap.get(n.entityId);
+        if (t) ({ propertyId, propertyName } = t);
+      } else if (n.entityType === "request" && n.entityId) {
+        const r = reqMap.get(n.entityId);
+        if (r) ({ propertyId, propertyName, unitNumber } = r);
+      }
+      return { ...n, propertyId, propertyName, unitNumber };
+    });
+  });
+}
+
+/** Just the owner's properties (id + name) — for filter chips etc. RLS-scoped. */
+export async function ownerPropertyOptions(ownerId: string): Promise<{ id: string; name: string }[]> {
+  return withUser(ownerId, (tx) =>
+    tx.select({ id: properties.id, name: properties.name }).from(properties).orderBy(properties.name),
+  );
+}
+
+export type OutstandingInvoice = {
+  id: string;
+  type: string;
+  amountCents: number;
+  dueDate: string;
+  status: string;
+  unitNumber: string;
+  propertyName: string;
+  tenantName: string | null;
+};
+
+/** Unpaid / late invoices across the owner's units — the owner-facing "who owes
+ *  what" list. Most-overdue first. RLS-scoped. */
+export async function ownerOutstanding(ownerId: string): Promise<OutstandingInvoice[]> {
+  return withUser(ownerId, async (tx) => {
+    const rows = await tx
+      .select({
+        id: invoices.id,
+        type: invoices.type,
+        amountCents: invoices.amountCents,
+        dueDate: invoices.dueDate,
+        status: invoices.status,
+        unitNumber: units.unitNumber,
+        propertyName: properties.name,
+        tenantName: users.fullName,
+        tenantEmail: users.email,
+      })
+      .from(invoices)
+      .innerJoin(units, eq(units.id, invoices.unitId))
+      .innerJoin(properties, eq(properties.id, units.propertyId))
+      .leftJoin(users, eq(users.id, units.tenantId))
+      .where(inArray(invoices.status, ["unpaid", "late"]))
+      .orderBy(invoices.dueDate);
+    return rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      amountCents: r.amountCents,
+      dueDate: r.dueDate,
+      status: r.status,
+      unitNumber: r.unitNumber,
+      propertyName: r.propertyName,
+      tenantName: r.tenantName ?? r.tenantEmail ?? null,
+    }));
   });
 }
 

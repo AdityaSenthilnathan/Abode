@@ -7,6 +7,7 @@ export function navForRole(role: Role): NavItem[] {
     case "owner":
       return [
         { href: "/dashboard", label: "Dashboard" },
+        { href: "/properties", label: "Properties" },
         { href: "/fix-it", label: "Fix-it" },
         { href: "/notifications", label: "Notifications" },
         { href: "/messages", label: "Messages" },

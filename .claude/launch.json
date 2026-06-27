@@ -14,6 +14,13 @@
       "runtimeArgs": ["run", "dev", "--", "-p", "3100"],
       "port": 3100,
       "autoPort": false
+    },
+    {
+      "name": "preview-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "-p", "3217"],
+      "port": 3217,
+      "autoPort": true
     }
   ]
 }

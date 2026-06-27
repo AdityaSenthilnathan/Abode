@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   Briefcase,
+  Building2,
   CreditCard,
   House,
   LayoutDashboard,
@@ -27,6 +28,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   "/messages": MessageSquare,
   "/settings": Settings,
   "/dashboard": LayoutDashboard,
+  "/properties": Building2,
   "/fix-it": Wrench,
   "/invites": Ticket,
   "/jobs": Briefcase,
@@ -92,8 +94,8 @@ export function NavLinks({ items }: { items: NavItem[] }) {
                 : "text-muted hover:bg-foreground/[0.06] hover:text-foreground"
             }`}
           >
-            {Icon && <Icon className="h-4 w-4" />}
-            <span className="hidden sm:inline">{n.label}</span>
+            {Icon && <Icon className="h-4 w-4 shrink-0" />}
+            <span className="hidden whitespace-nowrap sm:inline">{n.label}</span>
             {showBadge && (
               <span
                 aria-label={`${unreadMsgs} unread`}

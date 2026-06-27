@@ -30,6 +30,8 @@ export interface ConversationListItem {
   id: string;
   otherName: string;
   otherRole: string | null;
+  /** For a tenant participant: "Maple Court · Unit 101" (their home). Null otherwise. */
+  otherLocation: string | null;
   lastBody: string | null;
   taskId: string | null;
   taskTitle: string | null;
@@ -69,6 +71,21 @@ export async function listConversationsForUser(userId: string, role: string): Pr
     const userById = new Map(userRows.map((u) => [u.id, u] as const));
     const lastByConvo = new Map(lastRows.map((m) => [m.conversationId, m] as const));
 
+    // Where each tenant participant lives, so the list can show "Maple Court ·
+    // Unit 101" next to the name (mainly for the owner triaging conversations).
+    const tenantIds = userRows.filter((u) => u.role === "tenant").map((u) => u.id);
+    const locByTenant = new Map<string, string>();
+    if (tenantIds.length) {
+      const unitRows = await tx
+        .select({ tenantId: units.tenantId, unitNumber: units.unitNumber, propertyName: properties.name })
+        .from(units)
+        .innerJoin(properties, eq(properties.id, units.propertyId))
+        .where(inArray(units.tenantId, tenantIds));
+      for (const r of unitRows) {
+        if (r.tenantId) locByTenant.set(r.tenantId, `${r.propertyName} · Unit ${r.unitNumber}`);
+      }
+    }
+
     const out = convos.map((c) => {
       const otherId = c.participantA === userId ? c.participantB : c.participantA;
       const other = userById.get(otherId);
@@ -79,6 +96,7 @@ export async function listConversationsForUser(userId: string, role: string): Pr
         id: c.id,
         otherName: other?.fullName ?? other?.email ?? "Conversation",
         otherRole: other?.role ?? null,
+        otherLocation: other?.role === "tenant" ? locByTenant.get(otherId) ?? null : null,
         lastBody: last?.body ?? null,
         taskId: c.taskId,
         taskTitle: task?.title ?? null,

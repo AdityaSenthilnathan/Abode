@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { Building2, X } from "lucide-react";
 import type { ConversationListItem } from "@/server/services/messaging";
 import { Card } from "@/components/ui";
 
@@ -118,6 +118,12 @@ export function MessagesList({
                     {item.otherRole && (
                       <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium capitalize text-muted">
                         {ROLE_TAG[item.otherRole] ?? item.otherRole}
+                      </span>
+                    )}
+                    {item.otherLocation && (
+                      <span className="flex min-w-0 items-center gap-1 truncate text-xs text-muted">
+                        <Building2 className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{item.otherLocation}</span>
                       </span>
                     )}
                   </div>

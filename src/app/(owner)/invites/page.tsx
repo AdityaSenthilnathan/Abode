@@ -1,16 +1,14 @@
+import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { Building2, DoorOpen, KeyRound, Ticket, Users } from "lucide-react";
 import { assertRole } from "@/server/auth/guard";
 import { withUser } from "@/server/db/rls";
 import { inviteCodes, properties, units, users } from "@db/schema";
-import {
-  createPropertyAction,
-  generateEmployeeCodeAction,
-  generateTenantCodeAction,
-} from "@/actions/invites";
+import { generateEmployeeCodeAction, generateTenantCodeAction } from "@/actions/invites";
 import { NotConnected } from "@/components/not-connected";
-import { AddPropertyForm } from "@/components/owner/add-property-form";
-import { PropertyCard } from "@/components/owner/property-card";
+import { Collapsible } from "@/components/collapsible";
+import { Badge } from "@/components/ui";
 
 async function load(userId: string) {
   return withUser(userId, async (tx) => {
@@ -37,12 +35,6 @@ async function load(userId: string) {
       )
       .leftJoin(redeemer, eq(redeemer.id, inviteCodes.redeemedBy))
       .orderBy(desc(inviteCodes.createdAt));
-    const unitsByProp = new Map<string, typeof allUnits>();
-    for (const u of allUnits) {
-      const list = unitsByProp.get(u.propertyId) ?? [];
-      list.push(u);
-      unitsByProp.set(u.propertyId, list);
-    }
     // The current unredeemed tenant code per unit (if any) — so a vacant unit
     // shows its existing code instead of offering to mint a duplicate.
     const pendingTenantCodes = await tx
@@ -60,7 +52,7 @@ async function load(userId: string) {
         propertyName: propNameById.get(u.propertyId) ?? null,
         pendingCode: codeByUnit.get(u.id) ?? null,
       }));
-    return { props, unitsByProp, vacant, codes };
+    return { props, vacant, codes };
   });
 }
 
@@ -72,132 +64,158 @@ export default async function InvitesPage() {
   } catch {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Invite codes</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Invites</h1>
         <NotConnected />
       </div>
     );
   }
 
+  const unusedCodes = data.codes.filter((c) => !c.redeemedAt).length;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Properties & invites</h1>
-        <p className="text-sm opacity-60">Add properties and units, then generate codes for tenants and staff.</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Invites</h1>
+        <p className="mt-1 text-sm text-muted">
+          Generate join codes for tenants and staff. Manage the buildings themselves in{" "}
+          <Link href="/properties" className="font-medium text-brand hover:underline">
+            Properties
+          </Link>
+          .
+        </p>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Your properties</h2>
-
-        <AddPropertyForm
-          action={createPropertyAction}
-          token={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-        />
-
-        {data.props.length === 0 ? (
-          <p className="text-sm opacity-60">No properties yet — add your first one above.</p>
-        ) : (
-          <div className="space-y-3">
-            {data.props.map((p) => (
-              <PropertyCard key={p.id} property={p} units={data.unitsByProp.get(p.id) ?? []} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Tenant codes — vacant units</h2>
+      {/* ── Tenant codes ──────────────────────────────────────────── */}
+      <Collapsible
+        icon={<DoorOpen className="h-[18px] w-[18px]" />}
+        title="Invite a tenant"
+        subtitle="Generate a code for a vacant unit — the tenant redeems it to move in."
+        defaultOpen={data.vacant.length > 0}
+        badge={
+          <Badge tone={data.vacant.length ? "warning" : "neutral"}>
+            {data.vacant.length} vacant
+          </Badge>
+        }
+      >
         {data.vacant.length === 0 ? (
-          <p className="text-sm opacity-60">No vacant units.</p>
+          <p className="text-sm text-muted">No vacant units right now.</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {data.vacant.map((u) => (
               <form
                 key={u.id}
                 action={generateTenantCodeAction}
-                className="flex items-center justify-between gap-2 rounded-xl border border-black/10 p-3 dark:border-white/15"
+                className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface-2/40 p-3"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">Unit {u.unitNumber}</span>
                   {u.propertyName && (
-                    <span className="block truncate text-xs opacity-60">{u.propertyName}</span>
+                    <span className="block truncate text-xs text-muted">{u.propertyName}</span>
                   )}
                 </span>
                 <input type="hidden" name="unitId" value={u.id} />
                 {u.pendingCode ? (
-                  <code className="shrink-0 rounded-md bg-black/5 px-2 py-1 font-mono text-xs dark:bg-white/10">
+                  <code className="shrink-0 rounded-md bg-brand/10 px-2 py-1 font-mono text-xs text-brand">
                     {u.pendingCode}
                   </code>
                 ) : (
-                  <button className="shrink-0 rounded-md border border-black/15 px-2.5 py-1.5 text-xs hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-                    Generate code
+                  <button className="shrink-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium transition hover:bg-surface-2">
+                    Generate
                   </button>
                 )}
               </form>
             ))}
           </div>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Employee codes — properties</h2>
+      {/* ── Employee codes ────────────────────────────────────────── */}
+      <Collapsible
+        icon={<Users className="h-[18px] w-[18px]" />}
+        title="Invite staff"
+        subtitle="Generate a code that links a handyman to one of your properties."
+        badge={
+          <Badge tone="neutral">
+            {data.props.length} propert{data.props.length === 1 ? "y" : "ies"}
+          </Badge>
+        }
+      >
         {data.props.length === 0 ? (
-          <p className="text-sm opacity-60">No properties yet.</p>
+          <p className="text-sm text-muted">
+            No properties yet — add one in{" "}
+            <Link href="/properties" className="font-medium text-brand hover:underline">
+              Properties
+            </Link>
+            .
+          </p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {data.props.map((p) => (
               <form
                 key={p.id}
                 action={generateEmployeeCodeAction}
-                className="flex items-center justify-between rounded-xl border border-black/10 p-3 dark:border-white/15"
+                className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface-2/40 p-3"
               >
-                <span className="font-medium">{p.name}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <Building2 className="h-4 w-4 shrink-0 text-muted" />
+                  <span className="truncate font-medium">{p.name}</span>
+                </span>
                 <input type="hidden" name="propertyId" value={p.id} />
-                <button className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-                  Generate code
+                <button className="shrink-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium transition hover:bg-surface-2">
+                  Generate
                 </button>
               </form>
             ))}
           </div>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Generated codes</h2>
+      {/* ── Generated codes ───────────────────────────────────────── */}
+      <Collapsible
+        icon={<KeyRound className="h-[18px] w-[18px]" />}
+        title="All codes"
+        subtitle="Every code you've generated, newest first."
+        badge={
+          <Badge tone="neutral">
+            {unusedCodes} unused · {data.codes.length} total
+          </Badge>
+        }
+      >
         {data.codes.length === 0 ? (
-          <p className="text-sm opacity-60">None yet.</p>
+          <div className="flex flex-col items-center gap-2 py-6 text-center text-muted">
+            <Ticket className="h-6 w-6" />
+            <p className="text-sm">No codes generated yet.</p>
+          </div>
         ) : (
-          <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/15">
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
             {data.codes.map((c) => {
-              const location = [
-                c.propertyName,
-                c.unitNumber ? `Unit ${c.unitNumber}` : null,
-              ]
+              const location = [c.propertyName, c.unitNumber ? `Unit ${c.unitNumber}` : null]
                 .filter(Boolean)
                 .join(" · ");
               return (
-                <li key={c.id} className="flex items-center justify-between gap-4 p-3 text-sm">
+                <li key={c.id} className="flex items-center justify-between gap-3 p-3 text-sm">
                   <div className="min-w-0">
-                    <code className="font-mono">{c.code}</code>
-                    {location && <div className="text-xs opacity-60">{location}</div>}
+                    <code className="font-mono font-medium">{c.code}</code>
+                    {location && <div className="truncate text-xs text-muted">{location}</div>}
                   </div>
-                  <span className="capitalize opacity-60">{c.kind}</span>
-                  {c.redeemedAt ? (
-                    <span className="text-right text-emerald-600">
-                      {c.tenantName || c.tenantEmail ? (
-                        <>joined · {c.tenantName ?? c.tenantEmail}</>
-                      ) : (
-                        "redeemed"
-                      )}
-                    </span>
-                  ) : (
-                    <span className="opacity-50">unused</span>
-                  )}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge tone={c.kind === "tenant" ? "info" : "brand"}>{c.kind}</Badge>
+                    {c.redeemedAt ? (
+                      <Badge tone="success">
+                        {c.tenantName || c.tenantEmail
+                          ? `joined · ${c.tenantName ?? c.tenantEmail}`
+                          : "redeemed"}
+                      </Badge>
+                    ) : (
+                      <Badge tone="neutral">unused</Badge>
+                    )}
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
-      </section>
+      </Collapsible>
     </div>
   );
 }

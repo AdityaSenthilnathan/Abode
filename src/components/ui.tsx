@@ -8,9 +8,18 @@ import { cn } from "@/lib/utils";
  */
 
 /* --------------------------------------------------------------------- Card */
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
+export function Card({
+  id,
+  className,
+  children,
+}: {
+  id?: string;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <div
+      id={id}
       className={cn(
         "rounded-2xl border border-line bg-surface shadow-sm shadow-black/[0.03] dark:shadow-black/20",
         className,

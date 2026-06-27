@@ -59,6 +59,8 @@ export async function createPropertyAction(
   }
 
   await createProperty(owner.id, { name: parsed.data.name, address, lat, lng });
+  revalidatePath("/properties");
+  revalidatePath("/dashboard");
   revalidatePath("/invites");
   return { ok: true };
 }
@@ -83,6 +85,8 @@ export async function createUnitAction(formData: FormData) {
     unitNumber: parsed.data.unitNumber,
     rentAmountCents: Math.round(parsed.data.rent * 100),
   });
+  revalidatePath("/properties");
+  revalidatePath("/dashboard");
   revalidatePath("/invites");
 }
 
@@ -91,8 +95,10 @@ export async function deletePropertyAction(formData: FormData) {
   const id = idSchema.safeParse(formData.get("propertyId"));
   if (!id.success) return;
   await deleteProperty(owner.id, id.data);
+  revalidatePath("/properties");
+  revalidatePath("/dashboard");
   revalidatePath("/invites");
-  redirect("/invites");
+  redirect("/properties");
 }
 
 export async function deleteUnitAction(formData: FormData) {
@@ -100,8 +106,10 @@ export async function deleteUnitAction(formData: FormData) {
   const id = idSchema.safeParse(formData.get("unitId"));
   if (!id.success) return;
   await deleteUnit(owner.id, id.data);
+  revalidatePath("/properties");
+  revalidatePath("/dashboard");
   revalidatePath("/invites");
-  redirect("/invites");
+  redirect("/properties");
 }
 
 export async function generateTenantCodeAction(formData: FormData) {
