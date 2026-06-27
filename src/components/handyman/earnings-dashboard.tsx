@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, CheckCircle2, CreditCard, PieChart, TrendingUp, Wallet } from "lucide-react";
+import { BarChart3, CheckCircle2, CreditCard, PieChart, Printer, ReceiptText, TrendingUp, Wallet, X } from "lucide-react";
 import { formatCents } from "@/lib/utils";
 import type { Earning, PayoutCard } from "@/server/services/earnings";
 import { addPayoutCardAction } from "@/actions/earnings";
@@ -13,30 +13,49 @@ const TIMEFRAMES: { key: Timeframe; label: string }[] = [
   { key: "all", label: "All time" },
 ];
 
-const PALETTE = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#a855f7", "#ec4899", "#14b8a6"];
+// Warm, on-brand palette (terracotta → honey → sage → clay …) — no cool SaaS purples.
+const PALETTE = ["#c0613a", "#d99748", "#8a9a72", "#e0a458", "#9c5532", "#6f7f57", "#caa05a", "#b1623f"];
 
 interface Bucket {
   label: string;
   value: number;
+  /** Full label for the hover tooltip, e.g. "Jun 5" or "Jun 2026". */
+  tip: string;
 }
 
-/** Build the over-time series: day buckets for "this month", month buckets otherwise. */
+/** A single completed job, shaped for the charts + legend. */
+interface JobSlice {
+  taskId: string;
+  label: string;
+  property: string;
+  value: number;
+  completedAt: string;
+  color: string;
+}
+
+/** Over-time series: one bar per day for "this month", per month otherwise. */
 function buildBuckets(earnings: Earning[], tf: Timeframe, now: Date): Bucket[] {
   if (tf === "month") {
     const y = now.getFullYear();
     const m = now.getMonth();
+    const monthShort = now.toLocaleString(undefined, { month: "short" });
     const days = new Date(y, m + 1, 0).getDate();
-    const arr: Bucket[] = Array.from({ length: days }, (_, i) => ({ label: `${i + 1}`, value: 0 }));
+    const arr: Bucket[] = Array.from({ length: days }, (_, i) => ({
+      label: `${i + 1}`,
+      value: 0,
+      tip: `${monthShort} ${i + 1}`,
+    }));
     for (const e of earnings) {
       const d = new Date(e.completedAt);
       if (d.getFullYear() === y && d.getMonth() === m) arr[d.getDate() - 1].value += e.amountCents;
     }
     return arr;
   }
-  let monthsBack = tf === "3m" ? 3 : tf === "year" ? 12 : 12;
+  let monthsBack = tf === "3m" ? 3 : 12;
   if (tf === "all") {
     const earliest = earnings.reduce<number>((min, e) => Math.min(min, new Date(e.completedAt).getTime()), now.getTime());
-    const months = (now.getFullYear() - new Date(earliest).getFullYear()) * 12 + (now.getMonth() - new Date(earliest).getMonth()) + 1;
+    const months =
+      (now.getFullYear() - new Date(earliest).getFullYear()) * 12 + (now.getMonth() - new Date(earliest).getMonth()) + 1;
     monthsBack = Math.min(Math.max(months, 1), 24);
   }
   const arr: Bucket[] = [];
@@ -44,7 +63,11 @@ function buildBuckets(earnings: Earning[], tf: Timeframe, now: Date): Bucket[] {
   for (let i = monthsBack - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     idx.set(`${d.getFullYear()}-${d.getMonth()}`, arr.length);
-    arr.push({ label: d.toLocaleString(undefined, { month: "short" }), value: 0 });
+    arr.push({
+      label: d.toLocaleString(undefined, { month: "short" }),
+      value: 0,
+      tip: d.toLocaleString(undefined, { month: "short", year: "numeric" }),
+    });
   }
   for (const e of earnings) {
     const d = new Date(e.completedAt);
@@ -57,21 +80,22 @@ function buildBuckets(earnings: Earning[], tf: Timeframe, now: Date): Bucket[] {
 function Donut({
   segments,
   total,
+  periodLabel,
   hoverIdx,
   onHover,
 }: {
-  segments: { label: string; value: number; color: string }[];
+  segments: JobSlice[];
   total: number;
+  periodLabel: string;
   hoverIdx: number | null;
   onHover: (i: number | null) => void;
 }) {
-  // r + max strokeWidth/2 must stay within the 60 half-viewBox or the ring clips.
   const r = 50;
   const c = 2 * Math.PI * r;
   let acc = 0;
   const active = hoverIdx != null ? segments[hoverIdx] : null;
   const centerValue = active ? active.value : total;
-  const centerLabel = active ? active.label.toUpperCase() : "TOTAL";
+  const centerLabel = active ? active.label.toUpperCase() : periodLabel.toUpperCase();
   return (
     <svg viewBox="0 0 120 120" className="h-44 w-44 shrink-0">
       <g transform="rotate(-90 60 60)">
@@ -80,7 +104,7 @@ function Donut({
           const len = total > 0 ? (s.value / total) * c : 0;
           const el = (
             <circle
-              key={i}
+              key={s.taskId}
               cx="60"
               cy="60"
               r={r}
@@ -114,26 +138,193 @@ function Donut({
 
 function Bars({ data }: { data: Bucket[] }) {
   const max = Math.max(1, ...data.map((d) => d.value));
-  const labelEvery = data.length > 14 ? Math.ceil(data.length / 10) : 1;
+  const labelEvery = Math.max(1, Math.ceil(data.length / 6));
   return (
-    <div className="flex h-44 items-end gap-1">
-      {data.map((d, i) => (
-        <div key={i} className="group flex h-full flex-1 flex-col items-center justify-end gap-1.5">
-          <div className="flex w-full flex-1 items-end">
+    <div>
+      <div className="flex h-44 items-end gap-1 border-b border-line">
+        {data.map((d, i) => (
+          <div key={i} className="group relative flex h-full flex-1 items-end">
             <div
-              className="relative w-full rounded-t-md bg-brand/75 transition-colors group-hover:bg-brand"
-              style={{ height: `${Math.max((d.value / max) * 100, d.value > 0 ? 4 : 0)}%` }}
-            >
-              {d.value > 0 && (
-                <span className="pointer-events-none absolute -top-6 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background opacity-0 transition group-hover:opacity-100">
-                  {formatCents(d.value)}
-                </span>
-              )}
+              className="w-full rounded-t-md bg-brand/70 transition-colors group-hover:bg-brand"
+              style={{ height: `${d.value > 0 ? Math.max((d.value / max) * 100, 4) : 0}%` }}
+            />
+            {d.value > 0 && (
+              <span className="pointer-events-none absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-medium text-background opacity-0 shadow-sm transition group-hover:opacity-100">
+                {d.tip} · {formatCents(d.value)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex gap-1">
+        {data.map((d, i) => (
+          <div key={i} className="flex-1 text-center text-[9px] leading-none text-muted">
+            {i % labelEvery === 0 ? d.label : ""}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The per-job breakdown — "what job paid what" — shown beside both charts. */
+function JobLegend({
+  jobs,
+  total,
+  hoverIdx,
+  onHover,
+  interactive = false,
+}: {
+  jobs: JobSlice[];
+  total: number;
+  hoverIdx?: number | null;
+  onHover?: (i: number | null) => void;
+  interactive?: boolean;
+}) {
+  return (
+    <ul className="w-full space-y-1">
+      {jobs.map((s, i) => (
+        <li
+          key={s.taskId}
+          onMouseEnter={interactive ? () => onHover?.(i) : undefined}
+          onMouseLeave={interactive ? () => onHover?.(null) : undefined}
+          className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition ${
+            interactive && hoverIdx === i ? "bg-surface-2" : ""
+          }`}
+          style={{ opacity: !interactive || hoverIdx == null || hoverIdx === i ? 1 : 0.45 }}
+        >
+          <span className="mt-0.5 h-2.5 w-2.5 shrink-0 self-start rounded-full" style={{ background: s.color }} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">{s.label}</span>
+            <span className="block truncate text-xs text-muted">{s.property}</span>
+          </span>
+          <span className="shrink-0 font-semibold">{formatCents(s.value)}</span>
+          <span className="w-9 shrink-0 text-right text-xs text-muted">
+            {total > 0 ? Math.round((s.value / total) * 100) : 0}%
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ReceiptModal({
+  earning,
+  payout,
+  onClose,
+}: {
+  earning: JobSlice;
+  payout: PayoutCard | null;
+  onClose: () => void;
+}) {
+  const receiptNo = `RCP-${earning.taskId.slice(0, 8).toUpperCase()}`;
+  const paidDate = new Date(earning.completedAt).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #receipt-print,
+          #receipt-print * {
+            visibility: visible !important;
+          }
+          #receipt-print {
+            position: fixed;
+            inset: 0;
+            margin: 0;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          .receipt-noprint {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <div
+        id="receipt-print"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-line bg-surface-2/50 px-6 py-4">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <ReceiptText className="h-4 w-4 text-brand" /> Payout receipt
+            </div>
+            <div className="mt-0.5 font-mono text-xs text-muted">{receiptNo}</div>
+          </div>
+          <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            Paid
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="receipt-noprint -mr-1.5 -mt-1 grid h-7 w-7 place-items-center rounded-full text-muted transition hover:bg-surface-2 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted">Date paid</span>
+            <span className="font-medium">{paidDate}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted">Property</span>
+            <span className="font-medium">{earning.property}</span>
+          </div>
+
+          <div className="rounded-xl border border-line">
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+              <span className="min-w-0 truncate">{earning.label}</span>
+              <span className="shrink-0 font-medium">{formatCents(earning.value)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-line px-3 py-2.5">
+              <span className="text-sm font-semibold">Total paid</span>
+              <span className="text-lg font-bold">{formatCents(earning.value)}</span>
             </div>
           </div>
-          <span className="h-3 text-[9px] leading-none text-muted">{i % labelEvery === 0 ? d.label : ""}</span>
+
+          <div className="flex justify-between text-sm">
+            <span className="text-muted">Paid to</span>
+            <span className="font-medium">
+              {payout ? `${payout.brand} •••• ${payout.last4}` : "Pending payout method"}
+            </span>
+          </div>
+          <p className="border-t border-line pt-3 text-center text-[11px] text-muted">
+            Issued by Abode · Test mode — no real funds moved.
+          </p>
         </div>
-      ))}
+
+        <div className="receipt-noprint flex gap-2 border-t border-line px-6 py-4">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-sm font-semibold text-brand-foreground transition hover:brightness-110"
+          >
+            <Printer className="h-4 w-4" /> Print / save PDF
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium transition hover:bg-surface-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -144,9 +335,8 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
   const [chart, setChart] = useState<"wheel" | "time">("wheel");
   const [hoverSeg, setHoverSeg] = useState<number | null>(null);
   const [showCardForm, setShowCardForm] = useState(!payout);
+  const [receiptFor, setReceiptFor] = useState<JobSlice | null>(null);
 
-  // After saving (payout changes), drop the form to reveal the saved card.
-  // "Update card" flips this back without re-firing (last4 unchanged).
   useEffect(() => {
     setShowCardForm(!payout);
   }, [payout?.last4]);
@@ -162,24 +352,45 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
     return d;
   }, [tf, now]);
 
-  const filtered = useMemo(
-    () => earnings.filter((e) => new Date(e.completedAt) >= start),
-    [earnings, start],
-  );
+  const filtered = useMemo(() => earnings.filter((e) => new Date(e.completedAt) >= start), [earnings, start]);
 
   const total = filtered.reduce((s, e) => s + e.amountCents, 0);
-  const months = tf === "month" ? 1 : tf === "3m" ? 3 : tf === "year" ? 12 : Math.max(1, new Set(filtered.map((e) => new Date(e.completedAt).toISOString().slice(0, 7))).size);
+  const months =
+    tf === "month"
+      ? 1
+      : tf === "3m"
+        ? 3
+        : tf === "year"
+          ? 12
+          : Math.max(1, new Set(filtered.map((e) => new Date(e.completedAt).toISOString().slice(0, 7))).size);
   const monthly = Math.round(total / months);
+  const propertyCount = useMemo(() => new Set(filtered.map((e) => e.propertyName)).size, [filtered]);
 
-  const byProperty = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of filtered) m.set(e.propertyName, (m.get(e.propertyName) ?? 0) + e.amountCents);
-    return [...m.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value], i) => ({ label, value, color: PALETTE[i % PALETTE.length] }));
-  }, [filtered]);
+  // Each completed job is its own slice — biggest payout first.
+  const byJob = useMemo<JobSlice[]>(
+    () =>
+      filtered
+        .map((e) => ({
+          taskId: e.taskId,
+          label: e.title ?? "Maintenance job",
+          property: e.propertyName,
+          value: e.amountCents,
+          completedAt: e.completedAt,
+        }))
+        .sort((a, b) => b.value - a.value)
+        .map((j, i) => ({ ...j, color: PALETTE[i % PALETTE.length] })),
+    [filtered],
+  );
 
   const buckets = useMemo(() => buildBuckets(filtered, tf, now), [filtered, tf, now]);
+
+  // Concrete period being shown — e.g. "June 2026", so the charts name their range.
+  const periodLabel = useMemo(() => {
+    if (tf === "month") return now.toLocaleString(undefined, { month: "long", year: "numeric" });
+    if (tf === "3m") return "Last 3 months";
+    if (tf === "year") return "Last 12 months";
+    return "All time";
+  }, [tf, now]);
 
   const seg = (k: string, label: string, active: boolean, onClick: () => void) => (
     <button
@@ -207,13 +418,13 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
         {/* chart card */}
         <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-medium uppercase tracking-wide text-muted">
-                {mode === "total" ? "Total earned" : "Monthly average"} · {TIMEFRAMES.find((t) => t.key === tf)?.label}
+                {mode === "total" ? "Total earned" : "Monthly average"} · {periodLabel}
               </div>
               <div className="text-3xl font-bold tracking-tight">{formatCents(mode === "total" ? total : monthly)}</div>
             </div>
@@ -221,7 +432,7 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
               <button
                 type="button"
                 onClick={() => setChart("wheel")}
-                aria-label="Wheel chart"
+                aria-label="By job (wheel)"
                 className={`flex h-8 w-8 items-center justify-center rounded-md transition ${chart === "wheel" ? "bg-brand text-brand-foreground" : "text-muted hover:text-foreground"}`}
               >
                 <PieChart className="h-4 w-4" />
@@ -229,7 +440,7 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
               <button
                 type="button"
                 onClick={() => setChart("time")}
-                aria-label="Over-time chart"
+                aria-label="Over time (bars)"
                 className={`flex h-8 w-8 items-center justify-center rounded-md transition ${chart === "time" ? "bg-brand text-brand-foreground" : "text-muted hover:text-foreground"}`}
               >
                 <BarChart3 className="h-4 w-4" />
@@ -238,34 +449,20 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
           </div>
 
           {filtered.length === 0 ? (
-            <div className="grid h-44 place-items-center text-sm text-muted">No earnings in this period yet.</div>
+            <div className="grid h-44 place-items-center text-sm text-muted">No earnings in {periodLabel}.</div>
           ) : chart === "wheel" ? (
-            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-              <Donut segments={byProperty} total={total} hoverIdx={hoverSeg} onHover={setHoverSeg} />
-              <ul className="w-full space-y-1">
-                {byProperty.map((s, i) => (
-                  <li
-                    key={s.label}
-                    onMouseEnter={() => setHoverSeg(i)}
-                    onMouseLeave={() => setHoverSeg(null)}
-                    className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
-                      hoverSeg === i ? "bg-surface-2" : ""
-                    }`}
-                    style={{ opacity: hoverSeg == null || hoverSeg === i ? 1 : 0.45 }}
-                  >
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                    <span className="flex-1 truncate">{s.label}</span>
-                    <span className="font-medium">{formatCents(s.value)}</span>
-                    <span className="w-10 text-right text-xs text-muted">{Math.round((s.value / total) * 100)}%</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="flex flex-col items-center gap-5 sm:flex-row">
+              <Donut segments={byJob} total={total} periodLabel={periodLabel} hoverIdx={hoverSeg} onHover={setHoverSeg} />
+              <JobLegend jobs={byJob} total={total} hoverIdx={hoverSeg} onHover={setHoverSeg} interactive />
             </div>
           ) : (
-            <>
+            <div className="space-y-4">
               <Bars data={buckets} />
-              <p className="mt-2 text-center text-xs text-muted">Payments by {tf === "month" ? "day" : "month"} — hover a bar for the amount</p>
-            </>
+              <div className="border-t border-line pt-3">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Jobs in this period</div>
+                <JobLegend jobs={byJob} total={total} />
+              </div>
+            </div>
           )}
         </div>
 
@@ -290,7 +487,7 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-muted">Properties</dt>
-                <dd className="font-semibold">{byProperty.length}</dd>
+                <dd className="font-semibold">{propertyCount}</dd>
               </div>
             </dl>
           </div>
@@ -357,26 +554,40 @@ export function EarningsDashboard({ earnings, payout }: { earnings: Earning[]; p
         {filtered.length === 0 ? (
           <p className="text-sm text-muted">No completed projects in this period.</p>
         ) : (
-          <div className="max-h-[22vh] space-y-3 overflow-y-auto pr-1">
-            {filtered.map((e) => (
-              <div
-                key={e.taskId}
-                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-sm"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{e.title ?? "Maintenance job"}</div>
-                  <div className="truncate text-xs text-muted">
-                    {e.propertyName} · {new Date(e.completedAt).toLocaleDateString()}
+          <div className="max-h-[26vh] space-y-3 overflow-y-auto pr-1">
+            {byJob
+              .slice()
+              .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+              .map((e) => (
+                <div
+                  key={e.taskId}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{e.label}</div>
+                    <div className="truncate text-xs text-muted">
+                      {e.property} · {new Date(e.completedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReceiptFor(e)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium transition hover:bg-surface-2"
+                    >
+                      <ReceiptText className="h-3.5 w-3.5" /> Receipt
+                    </button>
+                    <div className="rounded-lg bg-emerald-500/10 px-2.5 py-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formatCents(e.value)}
+                    </div>
                   </div>
                 </div>
-                <div className="shrink-0 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                  {formatCents(e.amountCents)}
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </div>
+
+      {receiptFor && <ReceiptModal earning={receiptFor} payout={payout} onClose={() => setReceiptFor(null)} />}
     </div>
   );
 }
