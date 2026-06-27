@@ -169,6 +169,7 @@ export default async function HandymanAccountPage() {
                     role="Property manager"
                     name={m.fullName}
                     email={m.email}
+                    toUserId={m.id}
                   />
                 ))
               ) : (

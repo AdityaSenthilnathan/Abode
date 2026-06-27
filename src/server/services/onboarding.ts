@@ -235,6 +235,7 @@ export async function listEmployeeProperties(employeeId: string) {
         propertyId: properties.id,
         name: properties.name,
         address: properties.address,
+        ownerId: properties.ownerId,
         ownerName: users.fullName,
         ownerEmail: users.email,
         jobCount: propertyEmployees.jobCount,

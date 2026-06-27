@@ -1,6 +1,11 @@
+import { redirect } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { requireUser } from "@/server/auth/guard";
-import { getOrCreateOwnerConversation, listConversationsForUser } from "@/server/services/messaging";
+import {
+  getOrCreateDirectConversation,
+  getOrCreateOwnerConversation,
+  listConversationsForUser,
+} from "@/server/services/messaging";
 import { NotConnected } from "@/components/not-connected";
 import { EmptyState } from "@/components/ui";
 import { MessagesList, type SelectedJob } from "@/components/messages/messages-list";
@@ -9,10 +14,21 @@ import { AutoRefresh } from "@/components/auto-refresh";
 export default async function MessagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ job?: string }>;
+  searchParams: Promise<{ job?: string; to?: string }>;
 }) {
-  const { job } = await searchParams;
+  const { job, to } = await searchParams;
   const user = await requireUser();
+
+  // Deep-link from an account-page "Message <person>" button: resolve (creating
+  // it if needed) the 1:1 conversation with that person and drop the user
+  // straight into the chatbox, instead of the inbox list where a never-messaged
+  // contact wouldn't appear yet. redirect() must stay outside the try/catch
+  // below — it signals via a thrown error that must not be swallowed.
+  if (to) {
+    const cid = await getOrCreateDirectConversation(user.id, to).catch(() => null);
+    if (cid) redirect(`/messages/${cid}`);
+  }
+
   let convos: Awaited<ReturnType<typeof listConversationsForUser>> = [];
   let dbReady = true;
   try {

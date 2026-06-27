@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
-import { conversations, maintenanceRequests, messages, properties, taskReceipts, tasks, units, users } from "@db/schema";
+import { conversations, maintenanceRequests, messages, properties, propertyEmployees, taskReceipts, tasks, units, users } from "@db/schema";
 import type { Task } from "@db/schema";
 
 /**
@@ -219,6 +219,95 @@ export async function sendMessage(userId: string, conversationId: string, body: 
   return withUser(userId, (tx) =>
     tx.insert(messages).values({ conversationId, senderId: userId, body }).returning(),
   );
+}
+
+/**
+ * Resolve—or create—the direct 1:1 conversation between the current user and a
+ * person reachable from their account page: a tenant's manager or maintenance
+ * staff, a manager's handymen, a handyman's managers. The pairing is validated
+ * against the property graph so a user can't open a thread with an arbitrary
+ * account; returns null when no such relationship exists. asAdmin because we may
+ * create a row whose other participant the caller can't yet see under RLS — the
+ * same trust model the other getOrCreate* helpers use.
+ */
+export async function getOrCreateDirectConversation(
+  currentUserId: string,
+  targetUserId: string,
+): Promise<string | null> {
+  if (currentUserId === targetUserId) return null;
+  return asAdmin(async (tx) => {
+    const people = await tx
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(inArray(users.id, [currentUserId, targetUserId]));
+    const me = people.find((p) => p.id === currentUserId);
+    const them = people.find((p) => p.id === targetUserId);
+    if (!me || !them) return null;
+
+    const owner = me.role === "owner" ? me.id : them.role === "owner" ? them.id : null;
+    const tenant = me.role === "tenant" ? me.id : them.role === "tenant" ? them.id : null;
+    const handyman = me.role === "employee" ? me.id : them.role === "employee" ? them.id : null;
+
+    let type: "owner_tenant" | "owner_handyman" | "handyman_tenant";
+    let a: string;
+    let b: string;
+    let related = false;
+
+    if (owner && tenant) {
+      type = "owner_tenant";
+      [a, b] = [owner, tenant];
+      const [r] = await tx
+        .select({ id: units.id })
+        .from(units)
+        .innerJoin(properties, eq(properties.id, units.propertyId))
+        .where(and(eq(properties.ownerId, owner), eq(units.tenantId, tenant)))
+        .limit(1);
+      related = !!r;
+    } else if (owner && handyman) {
+      type = "owner_handyman";
+      [a, b] = [owner, handyman];
+      const [r] = await tx
+        .select({ id: propertyEmployees.propertyId })
+        .from(propertyEmployees)
+        .innerJoin(properties, eq(properties.id, propertyEmployees.propertyId))
+        .where(and(eq(properties.ownerId, owner), eq(propertyEmployees.employeeId, handyman)))
+        .limit(1);
+      related = !!r;
+    } else if (handyman && tenant) {
+      type = "handyman_tenant";
+      [a, b] = [handyman, tenant];
+      const [r] = await tx
+        .select({ id: units.id })
+        .from(units)
+        .innerJoin(propertyEmployees, eq(propertyEmployees.propertyId, units.propertyId))
+        .where(and(eq(propertyEmployees.employeeId, handyman), eq(units.tenantId, tenant)))
+        .limit(1);
+      related = !!r;
+    } else {
+      return null;
+    }
+    if (!related) return null;
+
+    const [existing] = await tx
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.type, type),
+          or(
+            and(eq(conversations.participantA, a), eq(conversations.participantB, b)),
+            and(eq(conversations.participantA, b), eq(conversations.participantB, a)),
+          ),
+        ),
+      )
+      .limit(1);
+    if (existing) return existing.id;
+    const [c] = await tx
+      .insert(conversations)
+      .values({ participantA: a, participantB: b, type })
+      .returning();
+    return c.id;
+  });
 }
 
 /** Find or create the owner↔tenant conversation for a tenant. */

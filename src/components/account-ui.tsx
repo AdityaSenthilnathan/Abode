@@ -67,12 +67,17 @@ export function ContactRow({
   role,
   name,
   email,
+  toUserId,
 }: {
   icon: ComponentType<{ className?: string }>;
   role: string;
   name: string | null;
   email: string;
+  /** When set, "Message" opens the 1:1 chat with this user directly (creating
+   *  the conversation if needed); otherwise it falls back to the inbox. */
+  toUserId?: string | null;
 }) {
+  const href = toUserId ? `/messages?to=${toUserId}` : "/messages";
   return (
     <div className="flex items-center gap-3 px-5 py-3.5">
       <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/10 text-sm font-semibold text-brand">
@@ -87,7 +92,7 @@ export function ContactRow({
           {role} · {email}
         </div>
       </div>
-      <Link href="/messages" className={`${button.secondary} shrink-0`}>
+      <Link href={href} className={`${button.secondary} shrink-0`}>
         Message
       </Link>
     </div>

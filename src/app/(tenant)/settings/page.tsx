@@ -118,6 +118,7 @@ export default async function SettingsPage() {
                   role="Property manager"
                   name={data.manager.fullName}
                   email={data.manager.email}
+                  toUserId={data.manager.id}
                 />
               )}
               {data.maintenance.length > 0 ? (
@@ -128,6 +129,7 @@ export default async function SettingsPage() {
                     role="Maintenance"
                     name={m.fullName}
                     email={m.email}
+                    toUserId={m.id}
                   />
                 ))
               ) : (

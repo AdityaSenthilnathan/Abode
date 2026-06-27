@@ -195,6 +195,7 @@ export default async function OwnerAccountPage() {
                     role={`Maintenance · ${m.jobCount} ${m.jobCount === 1 ? "job" : "jobs"}`}
                     name={m.fullName}
                     email={m.email}
+                    toUserId={m.id}
                   />
                 ))
               ) : (

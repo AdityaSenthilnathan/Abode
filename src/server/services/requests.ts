@@ -2,7 +2,7 @@ import "server-only";
 import { desc, eq } from "drizzle-orm";
 import { asAdmin, withUser } from "@/server/db/rls";
 import { presignView } from "@/server/s3";
-import { maintenanceRequests, tasks, units, users } from "@db/schema";
+import { maintenanceRequests, notifications, properties, tasks, units, users } from "@db/schema";
 
 const VIDEO_EXT = /\.(mp4|mov|webm|m4v)$/i;
 
@@ -13,10 +13,10 @@ export async function createRequest(
   userId: string,
   input: { description: string; urgency: Urgency; mediaKeys: string[] },
 ) {
-  return withUser(userId, async (tx) => {
+  const req = await withUser(userId, async (tx) => {
     const [unit] = await tx.select().from(units).limit(1); // RLS → tenant's own unit
     if (!unit) throw new Error("No unit is assigned to your account yet.");
-    const [req] = await tx
+    const [r] = await tx
       .insert(maintenanceRequests)
       .values({
         unitId: unit.id,
@@ -26,8 +26,37 @@ export async function createRequest(
         mediaUrls: input.mediaKeys,
       })
       .returning();
-    return req;
+    return r;
   });
+
+  // Alert the property manager. Filing a request was the one workflow step that
+  // notified no one — every other transition (assign / estimate / completion)
+  // already does — so a new request only surfaced if the manager happened to be
+  // on the fix-it page. Runs as admin: under RLS a tenant can't write a
+  // notification row addressed to the owner.
+  await asAdmin(async (tx) => {
+    const [row] = await tx
+      .select({ ownerId: properties.ownerId })
+      .from(units)
+      .innerJoin(properties, eq(properties.id, units.propertyId))
+      .where(eq(units.id, req.unitId))
+      .limit(1);
+    if (row?.ownerId) {
+      await tx.insert(notifications).values({
+        recipientId: row.ownerId,
+        type: "info",
+        title: "New maintenance request",
+        body: input.description.slice(0, 120),
+        entityType: "request",
+        entityId: req.id,
+      });
+    }
+  }).catch(() => {
+    // Best-effort: the request is already saved; a failed notification must not
+    // fail the tenant's submission.
+  });
+
+  return req;
 }
 
 export async function listMyRequests(userId: string) {

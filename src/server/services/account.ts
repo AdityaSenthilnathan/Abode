@@ -90,6 +90,7 @@ export async function getTenantAccount(userId: string): Promise<TenantAccount | 
 }
 
 export interface AccountContact {
+  id: string;
   fullName: string | null;
   email: string;
 }
@@ -155,7 +156,7 @@ export async function getHandymanAccount(userId: string): Promise<HandymanAccoun
   for (const p of props) {
     if (!p.ownerEmail || seen.has(p.ownerEmail)) continue;
     seen.add(p.ownerEmail);
-    managers.push({ fullName: p.ownerName, email: p.ownerEmail });
+    managers.push({ id: p.ownerId, fullName: p.ownerName, email: p.ownerEmail });
   }
 
   return {
@@ -272,7 +273,7 @@ export async function getOwnerAccount(ownerId: string): Promise<OwnerAccount> {
         for (const r of rows) {
           const existing = byWorker.get(r.id);
           if (existing) existing.jobCount += r.jobCount;
-          else byWorker.set(r.id, { fullName: r.fullName, email: r.email, jobCount: r.jobCount });
+          else byWorker.set(r.id, { id: r.id, fullName: r.fullName, email: r.email, jobCount: r.jobCount });
         }
         return [...byWorker.values()].sort((a, b) => b.jobCount - a.jobCount);
       })

@@ -18,5 +18,10 @@ export async function submitRequestAction(
   if (!p.success) return { error: p.error.issues[0].message };
   await createRequest(user.id, p.data);
   revalidatePath("/requests");
+  // The new request (and the manager's notification) surface on the owner's
+  // side too — clear their cached views so it shows without a hard reload.
+  revalidatePath("/fix-it");
+  revalidatePath("/dashboard");
+  revalidatePath("/notifications");
   return { ok: true };
 }
