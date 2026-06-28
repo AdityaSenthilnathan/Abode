@@ -6,7 +6,6 @@ import {
   Wrench,
   LineChart,
   Heart,
-  Sparkles,
   Receipt,
   Bell,
   TrendingUp,
@@ -144,10 +143,16 @@ export default async function Home() {
       {/* hero — speaks directly to the owner */}
       <main className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-12 lg:grid-cols-2 lg:py-20">
         <div className="text-center lg:text-left">
-          <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs font-medium text-muted backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-brand" />
-            For independent owners &amp; small landlords
-          </span>
+          <div className="animate-fade-up flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+            {["Owners", "Tenants", "Handymen"].map((r) => (
+              <span
+                key={r}
+                className="rounded-full border border-line bg-surface/60 px-3 py-1 text-xs font-semibold text-muted backdrop-blur"
+              >
+                {r}
+              </span>
+            ))}
+          </div>
 
           <h1
             className="animate-fade-up mt-6 text-balance text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl"

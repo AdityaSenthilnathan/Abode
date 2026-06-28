@@ -1,4 +1,4 @@
-import { Sparkles, Check } from "lucide-react";
+import { Check, House } from "lucide-react";
 import { LoginForm } from "@/components/auth/login-form";
 import { demoLogin } from "@/server/config";
 
@@ -19,11 +19,13 @@ export default function LoginPage() {
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-accent-2/30 blur-3xl" />
 
           <div className="relative">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5" />
-              Welcome back
-            </span>
-            <h2 className="mt-6 text-3xl font-semibold leading-tight tracking-tight">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
+                <House className="h-5 w-5" />
+              </span>
+              <span className="text-xl font-semibold tracking-tight">Abode</span>
+            </div>
+            <h2 className="mt-7 text-3xl font-semibold leading-tight tracking-tight">
               Everything your
               <br />
               property needs.
